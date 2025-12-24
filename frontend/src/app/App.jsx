@@ -1,4 +1,4 @@
-import { ServerStatus } from "./widgets/ServerStatus/ServerStatus";
+import { ServerStatus } from "../widgets/ServerStatus/ServerStatus";
 import "./App.css";
 
 function App() {
