@@ -23,7 +23,11 @@ class Server {
       await new Promise((resolve) => {
         this.httpServer.listen(ENV.PORT, () => {
           logger.info(
-            `Server running on port ${ENV.PORT} in ${ENV.NODE_ENV} mode`
+            {
+              port: ENV.PORT,
+              environment: ENV.NODE_ENV,
+            },
+            "Server started successfully"
           );
           resolve();
         });
@@ -32,7 +36,7 @@ class Server {
       // Setup graceful shutdown handlers
       this.setupShutdownHandlers();
     } catch (error) {
-      logger.error("Failed to start server:", error);
+      logger.error({ err: error }, "Failed to start server");
       process.exit(1);
     }
   }
@@ -45,7 +49,7 @@ class Server {
       }
 
       this.isShuttingDown = true;
-      logger.info(`${signal} received. Starting graceful shutdown...`);
+      logger.info({ signal }, "Starting graceful shutdown");
 
       // Stop accepting new connections
       if (this.httpServer) {
@@ -58,7 +62,7 @@ class Server {
             logger.info("Graceful shutdown completed");
             process.exit(0);
           } catch (error) {
-            logger.error("Error during shutdown:", error);
+            logger.error({ err: error }, "Error during shutdown");
             process.exit(1);
           }
         });
@@ -77,12 +81,12 @@ class Server {
 
     // Handle uncaught errors
     process.on("uncaughtException", (error) => {
-      logger.error("Uncaught Exception:", error);
+      logger.error({ err: error }, "Uncaught Exception");
       gracefulShutdown("UNCAUGHT_EXCEPTION");
     });
 
     process.on("unhandledRejection", (reason, promise) => {
-      logger.error("Unhandled Rejection at:", promise, "reason:", reason);
+      logger.error({ reason, promise }, "Unhandled Rejection");
       gracefulShutdown("UNHANDLED_REJECTION");
     });
   }

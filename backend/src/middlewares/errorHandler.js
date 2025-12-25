@@ -11,7 +11,7 @@ export const errorHandler = (err, req, res, next) => {
     message = err.message || "Internal Server Error";
   }
 
-  // Log error
+  // Prepare error log data
   const errorLog = {
     statusCode,
     message,
@@ -21,10 +21,11 @@ export const errorHandler = (err, req, res, next) => {
     stack: err.stack,
   };
 
+  // Log error with appropriate level
   if (statusCode >= 500) {
-    logger.error("Server error:", errorLog);
+    logger.error(errorLog, "Server error");
   } else {
-    logger.warn("Client error:", errorLog);
+    logger.warn(errorLog, "Client error");
   }
 
   // Prepare response

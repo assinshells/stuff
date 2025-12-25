@@ -17,11 +17,14 @@ class Database {
 
       this.connection = await mongoose.connect(ENV.MONGODB_URI, options);
 
-      logger.info(`MongoDB connected: ${this.connection.connection.host}`);
+      logger.info(
+        { host: this.connection.connection.host },
+        "MongoDB connected"
+      );
 
       // Handle connection events
       mongoose.connection.on("error", (err) => {
-        logger.error("MongoDB connection error:", err);
+        logger.error({ err }, "MongoDB connection error");
       });
 
       mongoose.connection.on("disconnected", () => {
@@ -34,7 +37,7 @@ class Database {
 
       return this.connection;
     } catch (error) {
-      logger.error("Failed to connect to MongoDB:", error);
+      logger.error({ err: error }, "Failed to connect to MongoDB");
       throw error;
     }
   }
@@ -46,7 +49,7 @@ class Database {
         logger.info("MongoDB disconnected successfully");
       }
     } catch (error) {
-      logger.error("Error disconnecting from MongoDB:", error);
+      logger.error({ err: error }, "Error disconnecting from MongoDB");
       throw error;
     }
   }
