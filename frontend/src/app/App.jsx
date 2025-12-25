@@ -1,22 +1,71 @@
-import { ServerStatus } from "../widgets/ServerStatus/ServerStatus";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "../features/auth/context/AuthContext";
+import { ProtectedRoute } from "../features/auth/components/ProtectedRoute/ProtectedRoute";
+import { AuthLayout } from "../features/auth/components/AuthLayout/AuthLayout";
+import { LoginForm } from "../features/auth/components/LoginForm/LoginForm";
+import { RegisterForm } from "../features/auth/components/RegisterForm/RegisterForm";
+import { ForgotPasswordForm } from "../features/auth/components/ForgotPasswordForm/ForgotPasswordForm";
+import { ResetPasswordForm } from "../features/auth/components/ResetPasswordForm/ResetPasswordForm";
+import { Chat } from "../pages/Chat/Chat";
 import "./App.css";
 
 function App() {
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Fullstack Application</h1>
-        <p>Production-ready MERN Stack with clean architecture</p>
-      </header>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public Auth Routes */}
+          <Route
+            path="/login"
+            element={
+              <AuthLayout>
+                <LoginForm />
+              </AuthLayout>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <AuthLayout>
+                <RegisterForm />
+              </AuthLayout>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <AuthLayout>
+                <ForgotPasswordForm />
+              </AuthLayout>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <AuthLayout>
+                <ResetPasswordForm />
+              </AuthLayout>
+            }
+          />
 
-      <main className="app-main">
-        <ServerStatus />
-      </main>
+          {/* Protected Routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
+            }
+          />
 
-      <footer className="app-footer">
-        <p>Built with Node.js, Express, MongoDB, and React</p>
-      </footer>
-    </div>
+          {/* Default redirect */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+          {/* 404 */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
