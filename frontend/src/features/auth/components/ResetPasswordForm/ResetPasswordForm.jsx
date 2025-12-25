@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { authApi } from "../../../../shared/api/authApi";
-import { PasswordField } from "../../../../shared/ui/PasswordField/PasswordField";
-import { ErrorMessage } from "../../../../shared/ui/ErrorMessage/ErrorMessage";
-import "./ResetPasswordForm.css";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { authApi } from "@shared/api/authApi";
+import { PasswordField } from "@shared/ui/PasswordField/PasswordField";
+import { ErrorMessage } from "@shared/ui/ErrorMessage/ErrorMessage";
 
 export const ResetPasswordForm = () => {
   const navigate = useNavigate();
@@ -22,12 +21,20 @@ export const ResetPasswordForm = () => {
 
   if (!token) {
     return (
-      <div className="reset-password-error">
-        <h2>Invalid Link</h2>
-        <p>This password reset link is invalid or has expired.</p>
+      <div className="text-center mx-auto" style={{ maxWidth: "400px" }}>
+        <div className="mb-4">
+          <i
+            className="bi bi-x-circle-fill text-danger"
+            style={{ fontSize: "5rem" }}
+          ></i>
+        </div>
+        <h2 className="mb-3">Invalid Link</h2>
+        <p className="text-muted mb-4">
+          This password reset link is invalid or has expired.
+        </p>
         <button
           type="button"
-          className="submit-button"
+          className="btn btn-primary w-100"
           onClick={() => navigate("/forgot-password")}
         >
           Request New Link
@@ -102,13 +109,20 @@ export const ResetPasswordForm = () => {
 
   if (success) {
     return (
-      <div className="reset-password-success">
-        <div className="success-icon">✓</div>
-        <h2>Password Reset Successful</h2>
-        <p>Your password has been successfully reset.</p>
+      <div className="text-center mx-auto" style={{ maxWidth: "400px" }}>
+        <div className="mb-4">
+          <i
+            className="bi bi-check-circle-fill text-success"
+            style={{ fontSize: "5rem" }}
+          ></i>
+        </div>
+        <h2 className="mb-3">Password Reset Successful</h2>
+        <p className="text-muted mb-4">
+          Your password has been successfully reset.
+        </p>
         <button
           type="button"
-          className="submit-button"
+          className="btn btn-primary w-100"
           onClick={() => navigate("/login")}
         >
           Login with New Password
@@ -118,15 +132,21 @@ export const ResetPasswordForm = () => {
   }
 
   return (
-    <form className="reset-password-form" onSubmit={handleSubmit}>
-      <h2>Set New Password</h2>
-      <p className="form-description">Please enter your new password below.</p>
+    <form
+      onSubmit={handleSubmit}
+      className="mx-auto"
+      style={{ maxWidth: "400px" }}
+    >
+      <h2 className="text-center mb-3">Set New Password</h2>
+      <p className="text-center text-muted mb-4">
+        Please enter your new password below.
+      </p>
 
       {generalError && <ErrorMessage message={generalError} />}
 
-      <div className="form-group">
-        <label htmlFor="newPassword">
-          New Password <span className="required">*</span>
+      <div className="mb-3">
+        <label htmlFor="newPassword" className="form-label">
+          New Password <span className="text-danger">*</span>
         </label>
         <PasswordField
           id="newPassword"
@@ -139,9 +159,9 @@ export const ResetPasswordForm = () => {
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="confirmPassword">
-          Confirm Password <span className="required">*</span>
+      <div className="mb-3">
+        <label htmlFor="confirmPassword" className="form-label">
+          Confirm Password <span className="text-danger">*</span>
         </label>
         <PasswordField
           id="confirmPassword"
@@ -154,18 +174,30 @@ export const ResetPasswordForm = () => {
         />
       </div>
 
-      <button type="submit" className="submit-button" disabled={loading}>
-        {loading ? "Resetting..." : "Reset Password"}
+      <button
+        type="submit"
+        className="btn btn-primary w-100 mb-3"
+        disabled={loading}
+      >
+        {loading ? (
+          <>
+            <span
+              className="spinner-border spinner-border-sm me-2"
+              role="status"
+              aria-hidden="true"
+            ></span>
+            Resetting...
+          </>
+        ) : (
+          "Reset Password"
+        )}
       </button>
 
-      <div className="form-footer">
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => navigate("/login")}
-        >
-          ← Back to Login
-        </button>
+      <div className="text-center">
+        <Link to="/login" className="text-decoration-none">
+          <i className="bi bi-arrow-left me-1"></i>
+          Back to Login
+        </Link>
       </div>
     </form>
   );

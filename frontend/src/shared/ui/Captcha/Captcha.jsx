@@ -1,19 +1,16 @@
 import { useEffect, useRef } from "react";
-import "./Captcha.css";
 
 export const Captcha = ({ onChange, error }) => {
   const captchaRef = useRef(null);
   const isDevelopment = import.meta.env.DEV;
 
   useEffect(() => {
-    // In development mode, auto-generate a fake captcha token
     if (isDevelopment) {
       const fakeToken = `dev_captcha_${Date.now()}`;
       onChange(fakeToken);
       return;
     }
 
-    // In production, load reCAPTCHA script
     const loadRecaptcha = () => {
       if (window.grecaptcha) {
         renderRecaptcha();
@@ -42,23 +39,26 @@ export const Captcha = ({ onChange, error }) => {
 
   if (isDevelopment) {
     return (
-      <div className="captcha-container">
-        <div className="captcha-dev">
-          <div className="captcha-dev-icon">✓</div>
-          <div className="captcha-dev-text">
+      <div>
+        <div className="alert alert-warning d-flex align-items-center">
+          <i
+            className="bi bi-check-circle-fill me-2"
+            style={{ fontSize: "1.5rem" }}
+          ></i>
+          <div>
             <strong>Development Mode</strong>
-            <span>Captcha verification bypassed</span>
+            <div className="small">Captcha verification bypassed</div>
           </div>
         </div>
-        {error && <div className="captcha-error">{error}</div>}
+        {error && <div className="text-danger small">{error}</div>}
       </div>
     );
   }
 
   return (
-    <div className="captcha-container">
-      <div ref={captchaRef} className="captcha-widget"></div>
-      {error && <div className="captcha-error">{error}</div>}
+    <div>
+      <div ref={captchaRef} className="d-flex justify-content-center"></div>
+      {error && <div className="text-danger small mt-2">{error}</div>}
     </div>
   );
 };

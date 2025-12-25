@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { PasswordField } from "../../../../shared/ui/PasswordField/PasswordField";
-import { ErrorMessage } from "../../../../shared/ui/ErrorMessage/ErrorMessage";
-import { Captcha } from "../../../../shared/ui/Captcha/Captcha";
-import "./RegisterForm.css";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useAuth } from "@features/auth/context/AuthContext";
+import { PasswordField } from "@shared/ui/PasswordField/PasswordField";
+import { ErrorMessage } from "@shared/ui/ErrorMessage/ErrorMessage";
+import { Captcha } from "@shared/ui/Captcha/Captcha";
 
 export const RegisterForm = () => {
   const navigate = useNavigate();
@@ -109,6 +108,7 @@ export const RegisterForm = () => {
         password: formData.password,
         captchaToken: formData.captchaToken,
       });
+      // Auto-login after successful registration
       navigate("/dashboard");
     } catch (error) {
       if (error.data?.errors) {
@@ -128,59 +128,66 @@ export const RegisterForm = () => {
   };
 
   return (
-    <form className="register-form" onSubmit={handleSubmit}>
-      <h2>Create Account</h2>
+    <form
+      onSubmit={handleSubmit}
+      className="mx-auto"
+      style={{ maxWidth: "400px" }}
+    >
+      <h2 className="text-center mb-4">Create Account</h2>
 
       {showFromLoginMessage && (
-        <div className="info-message">
+        <div className="alert alert-info" role="alert">
+          <i className="bi bi-info-circle me-2"></i>
           User not found. Please register to create a new account.
         </div>
       )}
 
       {generalError && <ErrorMessage message={generalError} />}
 
-      <div className="form-group">
-        <label htmlFor="username">
-          Username <span className="required">*</span>
+      <div className="mb-3">
+        <label htmlFor="username" className="form-label">
+          Username <span className="text-danger">*</span>
         </label>
         <input
           type="text"
+          className={`form-control ${errors.username ? "is-invalid" : ""}`}
           id="username"
           name="username"
           value={formData.username}
           onChange={handleChange}
-          className={errors.username ? "error" : ""}
           placeholder="Choose a username"
           autoComplete="username"
         />
         {errors.username && (
-          <div className="field-error">{errors.username}</div>
+          <div className="invalid-feedback d-block">{errors.username}</div>
         )}
       </div>
 
-      <div className="form-group">
-        <label htmlFor="email">
-          Email <span className="optional">(optional)</span>
+      <div className="mb-3">
+        <label htmlFor="email" className="form-label">
+          Email <span className="text-muted">(optional)</span>
         </label>
         <input
           type="email"
+          className={`form-control ${errors.email ? "is-invalid" : ""}`}
           id="email"
           name="email"
           value={formData.email}
           onChange={handleChange}
-          className={errors.email ? "error" : ""}
           placeholder="your@email.com"
           autoComplete="email"
         />
-        {errors.email && <div className="field-error">{errors.email}</div>}
-        <div className="field-hint">
+        {errors.email && (
+          <div className="invalid-feedback d-block">{errors.email}</div>
+        )}
+        <div className="form-text">
           Email is optional but recommended for password recovery
         </div>
       </div>
 
-      <div className="form-group">
-        <label htmlFor="password">
-          Password <span className="required">*</span>
+      <div className="mb-3">
+        <label htmlFor="password" className="form-label">
+          Password <span className="text-danger">*</span>
         </label>
         <PasswordField
           id="password"
@@ -193,9 +200,9 @@ export const RegisterForm = () => {
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="confirmPassword">
-          Confirm Password <span className="required">*</span>
+      <div className="mb-3">
+        <label htmlFor="confirmPassword" className="form-label">
+          Confirm Password <span className="text-danger">*</span>
         </label>
         <PasswordField
           id="confirmPassword"
@@ -208,23 +215,34 @@ export const RegisterForm = () => {
         />
       </div>
 
-      <div className="form-group">
+      <div className="mb-3">
         <Captcha onChange={handleCaptchaChange} error={errors.captchaToken} />
       </div>
 
-      <button type="submit" className="submit-button" disabled={loading}>
-        {loading ? "Creating Account..." : "Create Account"}
+      <button
+        type="submit"
+        className="btn btn-primary w-100 mb-3"
+        disabled={loading}
+      >
+        {loading ? (
+          <>
+            <span
+              className="spinner-border spinner-border-sm me-2"
+              role="status"
+              aria-hidden="true"
+            ></span>
+            Creating Account...
+          </>
+        ) : (
+          "Create Account"
+        )}
       </button>
 
-      <div className="form-footer">
-        <span>Already have an account? </span>
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => navigate("/login")}
-        >
+      <div className="text-center">
+        <span className="text-muted">Already have an account? </span>
+        <Link to="/login" className="text-decoration-none">
           Login
-        </button>
+        </Link>
       </div>
     </form>
   );

@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "../features/auth/context/AuthContext";
-import { ProtectedRoute } from "../features/auth/components/ProtectedRoute/ProtectedRoute";
-import { AuthLayout } from "../features/auth/components/AuthLayout/AuthLayout";
-import { LoginForm } from "../features/auth/components/LoginForm/LoginForm";
-import { RegisterForm } from "../features/auth/components/RegisterForm/RegisterForm";
-import { ForgotPasswordForm } from "../features/auth/components/ForgotPasswordForm/ForgotPasswordForm";
-import { ResetPasswordForm } from "../features/auth/components/ResetPasswordForm/ResetPasswordForm";
-import { Chat } from "../pages/Chat/Chat";
+import { AuthProvider } from "@features/auth/context/AuthContext";
+import { ProtectedRoute } from "@features/auth/components/ProtectedRoute/ProtectedRoute";
+import { AuthLayout } from "@features/auth/components/AuthLayout/AuthLayout";
+import { LoginForm } from "@features/auth/components/LoginForm/LoginForm";
+import { RegisterForm } from "@features/auth/components/RegisterForm/RegisterForm";
+import { ForgotPasswordForm } from "@features/auth/components/ForgotPasswordForm/ForgotPasswordForm";
+import { ResetPasswordForm } from "@features/auth/components/ResetPasswordForm/ResetPasswordForm";
+import { Chat } from "@pages/Chat/Chat";
 import "./App.css";
 
 function App() {

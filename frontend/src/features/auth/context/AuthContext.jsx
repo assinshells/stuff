@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { authApi } from "../../../shared/api/authApi";
-import { apiClient } from "../../../shared/api/apiClient";
+import { authApi } from "@shared/api/authApi";
+import { apiClient } from "@shared/api/apiClient";
 
 const AuthContext = createContext(null);
 
@@ -22,7 +22,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.getItem("refreshToken")
   );
 
-  // Setup axios interceptor for adding token to requests
   useEffect(() => {
     const requestInterceptor = apiClient.client.interceptors.request.use(
       (config) => {
@@ -34,13 +33,11 @@ export const AuthProvider = ({ children }) => {
       (error) => Promise.reject(error)
     );
 
-    // Setup response interceptor for handling 401 errors
     const responseInterceptor = apiClient.client.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
 
-        // If 401 and we have a refresh token, try to refresh
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
@@ -63,7 +60,6 @@ export const AuthProvider = ({ children }) => {
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
             return apiClient.client(originalRequest);
           } catch (refreshError) {
-            // Refresh failed, logout user
             logout();
             return Promise.reject(refreshError);
           }
@@ -79,7 +75,6 @@ export const AuthProvider = ({ children }) => {
     };
   }, [accessToken, refreshToken]);
 
-  // Load user on mount if we have a token
   useEffect(() => {
     const loadUser = async () => {
       if (accessToken) {
@@ -87,7 +82,6 @@ export const AuthProvider = ({ children }) => {
           const response = await authApi.getCurrentUser();
           setUser(response.data.user);
         } catch (error) {
-          // Token invalid, clear it
           logout();
         }
       }

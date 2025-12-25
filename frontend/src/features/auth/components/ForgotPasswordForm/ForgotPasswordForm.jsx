@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { authApi } from "../../../../shared/api/authApi";
-import { ErrorMessage } from "../../../../shared/ui/ErrorMessage/ErrorMessage";
-import { Captcha } from "../../../../shared/ui/Captcha/Captcha";
-import "./ForgotPasswordForm.css";
+import { useNavigate, Link } from "react-router-dom";
+import { authApi } from "@shared/api/authApi";
+import { ErrorMessage } from "@shared/ui/ErrorMessage/ErrorMessage";
+import { Captcha } from "@shared/ui/Captcha/Captcha";
 
 export const ForgotPasswordForm = () => {
   const navigate = useNavigate();
@@ -82,7 +81,7 @@ export const ForgotPasswordForm = () => {
     setLoading(true);
 
     try {
-      const response = await authApi.requestPasswordReset({
+      await authApi.requestPasswordReset({
         username: formData.username || undefined,
         email: formData.email || undefined,
         captchaToken: formData.captchaToken,
@@ -108,16 +107,21 @@ export const ForgotPasswordForm = () => {
 
   if (success) {
     return (
-      <div className="forgot-password-success">
-        <div className="success-icon">✓</div>
-        <h2>Check Your Email</h2>
-        <p>
+      <div className="text-center mx-auto" style={{ maxWidth: "400px" }}>
+        <div className="mb-4">
+          <i
+            className="bi bi-check-circle-fill text-success"
+            style={{ fontSize: "5rem" }}
+          ></i>
+        </div>
+        <h2 className="mb-3">Check Your Email</h2>
+        <p className="text-muted mb-4">
           If an account exists with the provided information, you will receive a
           password reset link shortly.
         </p>
         <button
           type="button"
-          className="submit-button"
+          className="btn btn-primary w-100"
           onClick={() => navigate("/login")}
         >
           Back to Login
@@ -127,67 +131,89 @@ export const ForgotPasswordForm = () => {
   }
 
   return (
-    <form className="forgot-password-form" onSubmit={handleSubmit}>
-      <h2>Reset Password</h2>
-      <p className="form-description">
+    <form
+      onSubmit={handleSubmit}
+      className="mx-auto"
+      style={{ maxWidth: "400px" }}
+    >
+      <h2 className="text-center mb-3">Reset Password</h2>
+      <p className="text-center text-muted mb-4">
         Enter your username or email address and we'll send you a link to reset
         your password.
       </p>
 
       {generalError && <ErrorMessage message={generalError} />}
 
-      <div className="form-group">
-        <label htmlFor="username">Username</label>
+      <div className="mb-3">
+        <label htmlFor="username" className="form-label">
+          Username
+        </label>
         <input
           type="text"
+          className={`form-control ${errors.username ? "is-invalid" : ""}`}
           id="username"
           name="username"
           value={formData.username}
           onChange={handleChange}
-          className={errors.username ? "error" : ""}
           placeholder="Your username"
           autoComplete="username"
         />
         {errors.username && (
-          <div className="field-error">{errors.username}</div>
+          <div className="invalid-feedback d-block">{errors.username}</div>
         )}
       </div>
 
-      <div className="form-divider">
-        <span>OR</span>
+      <div className="text-center my-3">
+        <span className="text-muted">OR</span>
       </div>
 
-      <div className="form-group">
-        <label htmlFor="email">Email</label>
+      <div className="mb-3">
+        <label htmlFor="email" className="form-label">
+          Email
+        </label>
         <input
           type="email"
+          className={`form-control ${errors.email ? "is-invalid" : ""}`}
           id="email"
           name="email"
           value={formData.email}
           onChange={handleChange}
-          className={errors.email ? "error" : ""}
           placeholder="your@email.com"
           autoComplete="email"
         />
-        {errors.email && <div className="field-error">{errors.email}</div>}
+        {errors.email && (
+          <div className="invalid-feedback d-block">{errors.email}</div>
+        )}
       </div>
 
-      <div className="form-group">
+      <div className="mb-3">
         <Captcha onChange={handleCaptchaChange} error={errors.captchaToken} />
       </div>
 
-      <button type="submit" className="submit-button" disabled={loading}>
-        {loading ? "Sending..." : "Send Reset Link"}
+      <button
+        type="submit"
+        className="btn btn-primary w-100 mb-3"
+        disabled={loading}
+      >
+        {loading ? (
+          <>
+            <span
+              className="spinner-border spinner-border-sm me-2"
+              role="status"
+              aria-hidden="true"
+            ></span>
+            Sending...
+          </>
+        ) : (
+          "Send Reset Link"
+        )}
       </button>
 
-      <div className="form-footer">
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => navigate("/login")}
-        >
-          ← Back to Login
-        </button>
+      <div className="text-center">
+        <Link to="/login" className="text-decoration-none">
+          <i className="bi bi-arrow-left me-1"></i>
+          Back to Login
+        </Link>
       </div>
     </form>
   );

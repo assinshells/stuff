@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { authApi } from "../../../../shared/api/authApi";
-import { PasswordField } from "../../../../shared/ui/PasswordField/PasswordField";
-import { ErrorMessage } from "../../../../shared/ui/ErrorMessage/ErrorMessage";
-import "./LoginForm.css";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "@features/auth/context/AuthContext";
+import { authApi } from "@shared/api/authApi";
+import { PasswordField } from "@shared/ui/PasswordField/PasswordField";
+import { ErrorMessage } from "@shared/ui/ErrorMessage/ErrorMessage";
 
 export const LoginForm = () => {
   const navigate = useNavigate();
@@ -25,7 +24,6 @@ export const LoginForm = () => {
       ...prev,
       [name]: value,
     }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -62,11 +60,9 @@ export const LoginForm = () => {
       navigate("/dashboard");
     } catch (error) {
       if (error.status === 401) {
-        // User not found, check if user exists
         try {
           const checkResponse = await authApi.checkUser(formData.username);
           if (!checkResponse.data.exists) {
-            // User doesn't exist, redirect to registration with pre-filled data
             navigate("/register", {
               state: {
                 username: formData.username,
@@ -88,30 +84,38 @@ export const LoginForm = () => {
   };
 
   return (
-    <form className="login-form" onSubmit={handleSubmit}>
-      <h2>Login</h2>
+    <form
+      onSubmit={handleSubmit}
+      className="mx-auto"
+      style={{ maxWidth: "400px" }}
+    >
+      <h2 className="text-center mb-4">Login</h2>
 
       {generalError && <ErrorMessage message={generalError} />}
 
-      <div className="form-group">
-        <label htmlFor="username">Username</label>
+      <div className="mb-3">
+        <label htmlFor="username" className="form-label">
+          Username
+        </label>
         <input
           type="text"
+          className={`form-control ${errors.username ? "is-invalid" : ""}`}
           id="username"
           name="username"
           value={formData.username}
           onChange={handleChange}
-          className={errors.username ? "error" : ""}
           placeholder="Enter your username"
           autoComplete="username"
         />
         {errors.username && (
-          <div className="field-error">{errors.username}</div>
+          <div className="invalid-feedback d-block">{errors.username}</div>
         )}
       </div>
 
-      <div className="form-group">
-        <label htmlFor="password">Password</label>
+      <div className="mb-3">
+        <label htmlFor="password" className="form-label">
+          Password
+        </label>
         <PasswordField
           id="password"
           name="password"
@@ -123,29 +127,36 @@ export const LoginForm = () => {
         />
       </div>
 
-      <div className="form-actions">
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => navigate("/forgot-password")}
-        >
+      <div className="d-flex justify-content-end mb-3">
+        <Link to="/forgot-password" className="text-decoration-none">
           Forgot password?
-        </button>
+        </Link>
       </div>
 
-      <button type="submit" className="submit-button" disabled={loading}>
-        {loading ? "Logging in..." : "Login"}
+      <button
+        type="submit"
+        className="btn btn-primary w-100 mb-3"
+        disabled={loading}
+      >
+        {loading ? (
+          <>
+            <span
+              className="spinner-border spinner-border-sm me-2"
+              role="status"
+              aria-hidden="true"
+            ></span>
+            Logging in...
+          </>
+        ) : (
+          "Login"
+        )}
       </button>
 
-      <div className="form-footer">
-        <span>Don't have an account? </span>
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => navigate("/register")}
-        >
+      <div className="text-center">
+        <span className="text-muted">Don't have an account? </span>
+        <Link to="/register" className="text-decoration-none">
           Register
-        </button>
+        </Link>
       </div>
     </form>
   );
