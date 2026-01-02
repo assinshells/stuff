@@ -1,30 +1,29 @@
 import mongoose from "mongoose";
-
-/**
- * Модель пользователя
- *
- * Особенности:
- * - Индексы для быстрого поиска
- * - Автоматические timestamps
- * - Виртуальные поля
- * - Методы экземпляра и статические методы
- */
+import bcrypt from "bcryptjs";
+import { config } from "../config/env.js";
 
 const userSchema = new mongoose.Schema(
   {
-    // Имя пользователя
-    name: {
+    // Nickname - уникальный идентификатор
+    nickname: {
       type: String,
-      required: [true, "Name is required"],
+      required: [true, "Nickname is required"],
+      unique: true,
+      lowercase: true,
       trim: true,
-      minlength: [2, "Name must be at least 2 characters"],
-      maxlength: [50, "Name cannot exceed 50 characters"],
+      minlength: [3, "Nickname must be at least 3 characters"],
+      maxlength: [30, "Nickname cannot exceed 30 characters"],
+      match: [
+        /^[a-z0-9_]+$/,
+        "Nickname can only contain lowercase letters, numbers and underscores",
+      ],
+      index: true,
     },
 
-    // Email - уникальный идентификатор
+    // Email - опциональный
     email: {
       type: String,
-      required: [true, "Email is required"],
+      sparse: true,
       unique: true,
       lowercase: true,
       trim: true,
@@ -32,17 +31,18 @@ const userSchema = new mongoose.Schema(
         /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
         "Please provide a valid email",
       ],
-      index: true, // Индекс для быстрого поиска
+      index: true,
     },
 
-    // Возраст (опциональный)
-    age: {
-      type: Number,
-      min: [0, "Age cannot be negative"],
-      max: [150, "Age must be realistic"],
+    // Пароль - всегда хешированный
+    password: {
+      type: String,
+      required: [true, "Password is required"],
+      minlength: [8, "Password must be at least 8 characters"],
+      select: false, // Не возвращаем по умолчанию
     },
 
-    // Роль пользователя
+    // Роль
     role: {
       type: String,
       enum: {
@@ -50,32 +50,68 @@ const userSchema = new mongoose.Schema(
         message: "{VALUE} is not a valid role",
       },
       default: "user",
-      index: true, // Индекс для фильтрации по роли
+      index: true,
     },
 
-    // Активность аккаунта
+    // Активность
     isActive: {
       type: Boolean,
       default: true,
-      index: true, // Индекс для фильтрации по статусу
+      index: true,
     },
+
+    // Email подтвержден
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Refresh токены
+    refreshTokens: [
+      {
+        token: {
+          type: String,
+          required: true,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+          expires: 60 * 60 * 24 * 7, // 7 дней
+        },
+      },
+    ],
+
+    // Сброс пароля
+    passwordResetToken: String,
+    passwordResetExpires: Date,
+
+    // Security - защита от брутфорса
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockUntil: Date,
+
+    // Последний логин
+    lastLogin: Date,
   },
   {
-    // Автоматически добавляет createdAt и updatedAt
     timestamps: true,
-
-    // Настройки toJSON для скрытия внутренних полей
     toJSON: {
       virtuals: true,
       transform: function (doc, ret) {
         ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
+        delete ret.password;
+        delete ret.refreshTokens;
+        delete ret.passwordResetToken;
+        delete ret.passwordResetExpires;
+        delete ret.loginAttempts;
+        delete ret.lockUntil;
         return ret;
       },
     },
-
-    // Также настройки toObject
     toObject: {
       virtuals: true,
       transform: function (doc, ret) {
@@ -90,102 +126,126 @@ const userSchema = new mongoose.Schema(
 
 // ============= ИНДЕКСЫ =============
 
-// Составной индекс для частых запросов
 userSchema.index({ isActive: 1, createdAt: -1 });
 userSchema.index({ role: 1, isActive: 1 });
+userSchema.index({ passwordResetToken: 1, passwordResetExpires: 1 });
 
 // ============= ВИРТУАЛЬНЫЕ ПОЛЯ =============
 
-// Виртуальное поле - не хранится в БД
-userSchema.virtual("ageGroup").get(function () {
-  if (!this.age) return "Unknown";
-  if (this.age < 18) return "Minor";
-  if (this.age < 60) return "Adult";
-  return "Senior";
+userSchema.virtual("isLocked").get(function () {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+});
+
+// ============= MIDDLEWARE (HOOKS) =============
+
+// Хеширование пароля перед сохранением
+userSchema.pre("save", async function (next) {
+  // Хешируем только если пароль изменился
+  if (!this.isModified("password")) {
+    return next();
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(config.security.bcryptRounds);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 // ============= МЕТОДЫ ЭКЗЕМПЛЯРА =============
 
 /**
- * Получить публичную информацию о пользователе
- * @returns {Object} Публичные данные пользователя
+ * Проверить пароль
+ */
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  try {
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch (error) {
+    throw new Error("Password comparison failed");
+  }
+};
+
+/**
+ * Увеличить счетчик неудачных попыток входа
+ */
+userSchema.methods.incLoginAttempts = async function () {
+  // Если есть блокировка и она истекла - сбросить
+  if (this.lockUntil && this.lockUntil < Date.now()) {
+    return this.updateOne({
+      $set: { loginAttempts: 1 },
+      $unset: { lockUntil: 1 },
+    });
+  }
+
+  const updates = { $inc: { loginAttempts: 1 } };
+
+  // Если достигнут лимит - заблокировать
+  if (
+    this.loginAttempts + 1 >= config.security.maxLoginAttempts &&
+    !this.isLocked
+  ) {
+    updates.$set = { lockUntil: Date.now() + config.security.lockoutDuration };
+  }
+
+  return this.updateOne(updates);
+};
+
+/**
+ * Сбросить счетчик попыток входа
+ */
+userSchema.methods.resetLoginAttempts = async function () {
+  return this.updateOne({
+    $set: { loginAttempts: 0, lastLogin: new Date() },
+    $unset: { lockUntil: 1 },
+  });
+};
+
+/**
+ * Получить публичный профиль
  */
 userSchema.methods.getPublicProfile = function () {
   return {
     id: this._id,
-    name: this.name,
+    nickname: this.nickname,
     email: this.email,
     role: this.role,
+    isActive: this.isActive,
+    createdAt: this.createdAt,
   };
 };
 
 /**
- * Проверить, является ли пользователь админом
- * @returns {Boolean}
+ * Проверить роль
  */
-userSchema.methods.isAdmin = function () {
-  return this.role === "admin";
+userSchema.methods.hasRole = function (...roles) {
+  return roles.includes(this.role);
 };
 
 // ============= СТАТИЧЕСКИЕ МЕТОДЫ =============
 
 /**
- * Найти активных пользователей
- * @returns {Promise<Array>} Массив активных пользователей
+ * Найти пользователя по nickname или email
  */
-userSchema.statics.findActive = function () {
-  return this.find({ isActive: true }).sort({ createdAt: -1 });
+userSchema.statics.findByCredential = function (credential) {
+  const query = credential.includes("@")
+    ? { email: credential.toLowerCase() }
+    : { nickname: credential.toLowerCase() };
+
+  return this.findOne(query).select("+password");
 };
 
 /**
- * Подсчитать пользователей по роли
- * @param {String} role - Роль пользователя
- * @returns {Promise<Number>} Количество пользователей
+ * Найти по токену сброса пароля
  */
-userSchema.statics.countByRole = function (role) {
-  return this.countDocuments({ role });
+userSchema.statics.findByPasswordResetToken = function (token) {
+  return this.findOne({
+    passwordResetToken: token,
+    passwordResetExpires: { $gt: Date.now() },
+  });
 };
 
-/**
- * Найти пользователя по email (case-insensitive)
- * @param {String} email - Email пользователя
- * @returns {Promise<Object>} Пользователь или null
- */
-userSchema.statics.findByEmail = function (email) {
-  return this.findOne({ email: email.toLowerCase() });
-};
-
-// ============= MIDDLEWARE (HOOKS) =============
-
-/**
- * Pre-save hook - выполняется перед сохранением
- * Можно использовать для дополнительной обработки
- */
-userSchema.pre("save", function (next) {
-  // Пример: нормализация email
-  if (this.isModified("email")) {
-    this.email = this.email.toLowerCase().trim();
-  }
-
-  next();
-});
-
-/**
- * Pre-remove hook - выполняется перед удалением
- * Можно использовать для очистки связанных данных
- */
-userSchema.pre(
-  "deleteOne",
-  { document: true, query: false },
-  async function (next) {
-    // Пример: удаление связанных документов
-    // await RelatedModel.deleteMany({ userId: this._id });
-
-    next();
-  }
-);
-
-// Создание модели
 const User = mongoose.model("User", userSchema);
 
 export default User;
