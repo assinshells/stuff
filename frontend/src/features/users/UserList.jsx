@@ -1,22 +1,32 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useApp } from "../../app/AppContext";
 import { userApi } from "../../shared/api/userApi";
 import { LoadingSpinner, ErrorAlert, EmptyState } from "../../shared/ui";
 
 /**
  * Компонент списка пользователей
- *
- * Функционал:
- * - Загрузка списка пользователей
- * - Пагинация
- * - Фильтрация
- * - CRUD операции
  */
+
+// Debounce helper
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 const UserList = () => {
   const { showError, showNotification, withLoading } = useApp();
 
-  // State
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,10 +43,13 @@ const UserList = () => {
     isActive: "",
   });
 
+  // Debounced фильтры
+  const debouncedFilters = useDebounce(filters, 300);
+
   /**
    * Загрузка пользователей
    */
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -44,7 +57,7 @@ const UserList = () => {
       const params = {
         page: pagination.page,
         limit: pagination.limit,
-        ...filters,
+        ...debouncedFilters,
       };
 
       const response = await userApi.getAll(params);
@@ -61,7 +74,7 @@ const UserList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.limit, debouncedFilters, showError]);
 
   /**
    * Удаление пользователя
@@ -94,20 +107,18 @@ const UserList = () => {
    */
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPagination((prev) => ({ ...prev, page: 1 })); // Сброс на первую страницу
+    setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
-  // Загрузка при монтировании и изменении фильтров
+  // Загрузка при изменении page или debouncedFilters
   useEffect(() => {
     loadUsers();
-  }, [pagination.page, filters]);
+  }, [loadUsers]);
 
-  // Loading state
   if (loading && users.length === 0) {
     return <LoadingSpinner />;
   }
 
-  // Error state
   if (error && users.length === 0) {
     return (
       <div className="container mt-5">
@@ -177,6 +188,19 @@ const UserList = () => {
           </div>
         </div>
       </div>
+
+      {/* Loading overlay для фильтров */}
+      {loading && users.length > 0 && (
+        <div className="text-center mb-3">
+          <div
+            className="spinner-border spinner-border-sm text-primary"
+            role="status"
+          >
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <span className="ms-2 text-muted">Updating...</span>
+        </div>
+      )}
 
       {/* Users Table */}
       {users.length === 0 ? (

@@ -13,13 +13,11 @@ import logger from "../utils/logger.js";
 import { config } from "../config/env.js";
 
 /**
- * Auth Controller - бизнес-логика аутентификации
+ * Auth Controller
  */
 
 /**
- * CHECK USER - проверка существования пользователя
- * POST /api/auth/check
- * Body: { credential } - nickname или email
+ * CHECK USER
  */
 export const checkUser = async (req, res) => {
   const { credential } = req.body;
@@ -27,7 +25,6 @@ export const checkUser = async (req, res) => {
   const user = await User.findByCredential(credential);
 
   if (!user) {
-    // Пользователь не найден - нужна регистрация
     logger.info({ credential }, "User not found - registration required");
 
     return res.json({
@@ -40,7 +37,6 @@ export const checkUser = async (req, res) => {
     });
   }
 
-  // Пользователь найден - нужен пароль
   logger.info(
     { userId: user._id, credential },
     "User found - password required"
@@ -61,21 +57,17 @@ export const checkUser = async (req, res) => {
 };
 
 /**
- * LOGIN - вход пользователя
- * POST /api/auth/login
- * Body: { credential, password }
+ * LOGIN
  */
 export const login = async (req, res) => {
   const { credential, password } = req.body;
 
-  // Находим пользователя
   const user = await User.findByCredential(credential);
 
   if (!user) {
     throw new NotFoundError("User not found");
   }
 
-  // Проверяем блокировку
   if (user.isLocked) {
     logger.warn({ userId: user._id }, "Login attempt on locked account");
     throw new UnauthorizedError(
@@ -83,16 +75,13 @@ export const login = async (req, res) => {
     );
   }
 
-  // Проверяем активность
   if (!user.isActive) {
     throw new UnauthorizedError("Account is deactivated");
   }
 
-  // Проверяем пароль (защита от timing attacks через constant-time comparison)
   const isPasswordValid = await user.comparePassword(password);
 
   if (!isPasswordValid) {
-    // Увеличиваем счетчик неудачных попыток
     await user.incLoginAttempts();
 
     logger.warn(
@@ -106,26 +95,23 @@ export const login = async (req, res) => {
     throw new UnauthorizedError("Invalid credentials");
   }
 
-  // Успешный вход - сбрасываем счетчик
   await user.resetLoginAttempts();
 
-  // Генерируем токены
   const { accessToken, refreshToken } = generateTokenPair(user._id, user.role);
 
-  // Сохраняем refresh token в БД
   user.refreshTokens.push({
     token: refreshToken,
+    createdAt: new Date(),
   });
   await user.save();
 
   logger.info({ userId: user._id }, "User logged in successfully");
 
-  // Устанавливаем refresh token в httpOnly cookie
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
     secure: config.isProduction,
-    sameSite: "strict",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
+    sameSite: config.isProduction ? "strict" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
   res.json({
@@ -139,17 +125,13 @@ export const login = async (req, res) => {
 };
 
 /**
- * REGISTER - регистрация нового пользователя
- * POST /api/auth/register
- * Body: { nickname, password, email?, captchaToken }
+ * REGISTER
  */
 export const register = async (req, res) => {
   const { nickname, password, email, captchaToken } = req.body;
 
-  // Валидация captcha
   await validateCaptcha(captchaToken);
 
-  // Проверяем уникальность nickname
   const existingUser = await User.findOne({
     nickname: nickname.toLowerCase(),
   });
@@ -158,7 +140,6 @@ export const register = async (req, res) => {
     throw new ConflictError("Nickname already exists");
   }
 
-  // Проверяем уникальность email (если указан)
   if (email) {
     const existingEmail = await User.findOne({
       email: email.toLowerCase(),
@@ -169,7 +150,6 @@ export const register = async (req, res) => {
     }
   }
 
-  // Создаем пользователя
   const user = await User.create({
     nickname: nickname.toLowerCase(),
     password,
@@ -178,17 +158,18 @@ export const register = async (req, res) => {
 
   logger.info({ userId: user._id, nickname }, "New user registered");
 
-  // Автоматически логиним пользователя
   const { accessToken, refreshToken } = generateTokenPair(user._id, user.role);
 
-  user.refreshTokens.push({ token: refreshToken });
+  user.refreshTokens.push({
+    token: refreshToken,
+    createdAt: new Date(),
+  });
   await user.save();
 
-  // Устанавливаем refresh token в cookie
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
     secure: config.isProduction,
-    sameSite: "strict",
+    sameSite: config.isProduction ? "strict" : "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -203,51 +184,53 @@ export const register = async (req, res) => {
 };
 
 /**
- * REFRESH - обновление access token
- * POST /api/auth/refresh
+ * REFRESH
  */
 export const refresh = async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
+    logger.warn("Refresh attempt without token");
     throw new UnauthorizedError("Refresh token not found");
   }
 
-  // Верифицируем refresh token
   const decoded = verifyRefreshToken(refreshToken);
 
-  // Находим пользователя
   const user = await User.findById(decoded.userId);
 
   if (!user) {
+    logger.warn(
+      { userId: decoded.userId },
+      "Refresh token for non-existent user"
+    );
     throw new UnauthorizedError("User not found");
   }
 
-  // Проверяем что токен есть в БД
   const tokenExists = user.refreshTokens.some((t) => t.token === refreshToken);
 
   if (!tokenExists) {
+    logger.warn({ userId: user._id }, "Invalid refresh token used");
     throw new UnauthorizedError("Invalid refresh token");
   }
 
-  // Генерируем новую пару токенов
   const { accessToken, refreshToken: newRefreshToken } = generateTokenPair(
     user._id,
     user.role
   );
 
-  // Заменяем старый refresh token на новый
   user.refreshTokens = user.refreshTokens.filter(
     (t) => t.token !== refreshToken
   );
-  user.refreshTokens.push({ token: newRefreshToken });
+  user.refreshTokens.push({
+    token: newRefreshToken,
+    createdAt: new Date(),
+  });
   await user.save();
 
-  // Обновляем cookie
   res.cookie("refreshToken", newRefreshToken, {
     httpOnly: true,
     secure: config.isProduction,
-    sameSite: "strict",
+    sameSite: config.isProduction ? "strict" : "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -262,14 +245,12 @@ export const refresh = async (req, res) => {
 };
 
 /**
- * LOGOUT - выход пользователя
- * POST /api/auth/logout
+ * LOGOUT
  */
 export const logout = async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
 
   if (refreshToken && req.user) {
-    // Удаляем refresh token из БД
     req.user.refreshTokens = req.user.refreshTokens.filter(
       (t) => t.token !== refreshToken
     );
@@ -278,8 +259,11 @@ export const logout = async (req, res) => {
     logger.info({ userId: req.user._id }, "User logged out");
   }
 
-  // Очищаем cookie
-  res.clearCookie("refreshToken");
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: config.isProduction,
+    sameSite: config.isProduction ? "strict" : "lax",
+  });
 
   res.json({
     success: true,
@@ -288,9 +272,7 @@ export const logout = async (req, res) => {
 };
 
 /**
- * FORGOT PASSWORD - запрос на сброс пароля
- * POST /api/auth/forgot-password
- * Body: { credential } - nickname или email
+ * FORGOT PASSWORD
  */
 export const forgotPassword = async (req, res) => {
   const { credential } = req.body;
@@ -298,7 +280,6 @@ export const forgotPassword = async (req, res) => {
   const user = await User.findByCredential(credential);
 
   if (!user) {
-    // Для безопасности всегда возвращаем успех
     logger.warn(
       { credential },
       "Password reset requested for non-existent user"
@@ -310,19 +291,16 @@ export const forgotPassword = async (req, res) => {
     });
   }
 
-  // Генерируем reset token
   const resetToken = crypto.randomBytes(32).toString("hex");
   const resetTokenHash = crypto
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
 
-  // Сохраняем hash токена и время истечения
   user.passwordResetToken = resetTokenHash;
   user.passwordResetExpires = Date.now() + config.security.passwordResetExpiry;
   await user.save();
 
-  // Отправляем email (или логируем в DEV)
   try {
     await sendPasswordResetEmail(user, resetToken);
   } catch (error) {
@@ -330,7 +308,6 @@ export const forgotPassword = async (req, res) => {
       { userId: user._id, error },
       "Failed to send password reset email"
     );
-    // Не пробрасываем ошибку - для безопасности
   }
 
   logger.info({ userId: user._id }, "Password reset requested");
@@ -342,32 +319,25 @@ export const forgotPassword = async (req, res) => {
 };
 
 /**
- * RESET PASSWORD - установка нового пароля
- * POST /api/auth/reset-password
- * Body: { token, newPassword }
+ * RESET PASSWORD
  */
 export const resetPassword = async (req, res) => {
   const { token, newPassword } = req.body;
 
-  // Хешируем токен для поиска
   const resetTokenHash = crypto
     .createHash("sha256")
     .update(token)
     .digest("hex");
 
-  // Находим пользователя по токену
   const user = await User.findByPasswordResetToken(resetTokenHash);
 
   if (!user) {
     throw new ValidationError("Invalid or expired reset token");
   }
 
-  // Устанавливаем новый пароль
   user.password = newPassword;
   user.passwordResetToken = undefined;
   user.passwordResetExpires = undefined;
-
-  // Очищаем все refresh токены (logout везде)
   user.refreshTokens = [];
 
   await user.save();
@@ -382,8 +352,7 @@ export const resetPassword = async (req, res) => {
 };
 
 /**
- * GET ME - получить текущего пользователя
- * GET /api/auth/me
+ * GET ME
  */
 export const getMe = async (req, res) => {
   res.json({

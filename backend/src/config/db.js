@@ -4,17 +4,14 @@ import logger from "../utils/logger.js";
 
 /**
  * Подключение к MongoDB с обработкой ошибок и переподключением
- *
- * Особенности:
- * - Автоматическое переподключение при разрыве
- * - Логирование всех событий соединения
- * - Graceful shutdown
- * - Production-ready настройки
  */
 
 class Database {
   constructor() {
     this.isConnected = false;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectInterval = 5000;
 
     // Настройка обработчиков событий
     this.setupEventListeners();
@@ -26,6 +23,7 @@ class Database {
   setupEventListeners() {
     mongoose.connection.on("connected", () => {
       this.isConnected = true;
+      this.reconnectAttempts = 0;
       logger.info("MongoDB: Connected successfully");
     });
 
@@ -37,18 +35,28 @@ class Database {
     mongoose.connection.on("disconnected", () => {
       this.isConnected = false;
       logger.warn("MongoDB: Disconnected");
+
+      // Автоматическое переподключение
+      if (
+        config.isProduction &&
+        this.reconnectAttempts < this.maxReconnectAttempts
+      ) {
+        this.reconnectAttempts++;
+        logger.info(
+          `MongoDB: Attempting reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`
+        );
+        setTimeout(() => this.connect(), this.reconnectInterval);
+      }
     });
 
     // Graceful shutdown
-    process.on("SIGINT", async () => {
+    const shutdown = async (signal) => {
+      logger.info(`${signal} received, closing MongoDB connection...`);
       await this.disconnect();
-      process.exit(0);
-    });
+    };
 
-    process.on("SIGTERM", async () => {
-      await this.disconnect();
-      process.exit(0);
-    });
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
   }
 
   /**
@@ -59,9 +67,8 @@ class Database {
       // Настройки подключения
       const options = {
         ...config.db.options,
-        // Дополнительные настройки для production
-        autoIndex: config.isDevelopment, // Отключаем автоиндексацию в production
-        serverSelectionTimeoutMS: 5000, // Таймаут выбора сервера
+        autoIndex: config.isDevelopment,
+        serverSelectionTimeoutMS: 5000,
       };
 
       await mongoose.connect(config.db.uri, options);
@@ -69,10 +76,20 @@ class Database {
     } catch (error) {
       logger.error("Failed to connect to database:", error);
 
-      // В production не падаем сразу, даем время на переподключение
-      if (config.isProduction) {
-        logger.info("Retrying database connection in 5 seconds...");
-        setTimeout(() => this.connect(), 5000);
+      if (
+        config.isProduction &&
+        this.reconnectAttempts < this.maxReconnectAttempts
+      ) {
+        this.reconnectAttempts++;
+        logger.info(
+          `Retrying database connection in ${
+            this.reconnectInterval / 1000
+          } seconds... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
+        );
+        setTimeout(() => this.connect(), this.reconnectInterval);
+      } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        logger.error("Max reconnection attempts reached. Exiting...");
+        process.exit(1);
       } else {
         process.exit(1);
       }

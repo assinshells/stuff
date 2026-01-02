@@ -4,7 +4,6 @@ import { config } from "../config/env.js";
 
 const userSchema = new mongoose.Schema(
   {
-    // Nickname - уникальный идентификатор
     nickname: {
       type: String,
       required: [true, "Nickname is required"],
@@ -20,7 +19,6 @@ const userSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Email - опциональный
     email: {
       type: String,
       sparse: true,
@@ -34,15 +32,13 @@ const userSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Пароль - всегда хешированный
     password: {
       type: String,
       required: [true, "Password is required"],
       minlength: [8, "Password must be at least 8 characters"],
-      select: false, // Не возвращаем по умолчанию
+      select: false,
     },
 
-    // Роль
     role: {
       type: String,
       enum: {
@@ -53,20 +49,17 @@ const userSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Активность
     isActive: {
       type: Boolean,
       default: true,
       index: true,
     },
 
-    // Email подтвержден
     isEmailVerified: {
       type: Boolean,
       default: false,
     },
 
-    // Refresh токены
     refreshTokens: [
       {
         token: {
@@ -76,23 +69,19 @@ const userSchema = new mongoose.Schema(
         createdAt: {
           type: Date,
           default: Date.now,
-          expires: 60 * 60 * 24 * 7, // 7 дней
         },
       },
     ],
 
-    // Сброс пароля
     passwordResetToken: String,
     passwordResetExpires: Date,
 
-    // Security - защита от брутфорса
     loginAttempts: {
       type: Number,
       default: 0,
     },
     lockUntil: Date,
 
-    // Последний логин
     lastLogin: Date,
   },
   {
@@ -140,7 +129,6 @@ userSchema.virtual("isLocked").get(function () {
 
 // Хеширование пароля перед сохранением
 userSchema.pre("save", async function (next) {
-  // Хешируем только если пароль изменился
   if (!this.isModified("password")) {
     return next();
   }
@@ -152,6 +140,21 @@ userSchema.pre("save", async function (next) {
   } catch (error) {
     next(error);
   }
+});
+
+// Очистка старых refresh tokens
+userSchema.pre("save", function (next) {
+  // Максимум 5 активных токенов на пользователя
+  const MAX_TOKENS = 5;
+
+  if (this.refreshTokens && this.refreshTokens.length > MAX_TOKENS) {
+    // Удаляем самые старые токены
+    this.refreshTokens = this.refreshTokens
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, MAX_TOKENS);
+  }
+
+  next();
 });
 
 // ============= МЕТОДЫ ЭКЗЕМПЛЯРА =============
@@ -171,7 +174,6 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
  * Увеличить счетчик неудачных попыток входа
  */
 userSchema.methods.incLoginAttempts = async function () {
-  // Если есть блокировка и она истекла - сбросить
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
       $set: { loginAttempts: 1 },
@@ -181,7 +183,6 @@ userSchema.methods.incLoginAttempts = async function () {
 
   const updates = { $inc: { loginAttempts: 1 } };
 
-  // Если достигнут лимит - заблокировать
   if (
     this.loginAttempts + 1 >= config.security.maxLoginAttempts &&
     !this.isLocked

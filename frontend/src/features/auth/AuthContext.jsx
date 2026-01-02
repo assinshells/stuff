@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import { authApi } from "../../shared/api/authApi";
 import api from "../../shared/api/axios";
@@ -15,12 +16,13 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState(null);
 
+  const refreshingRef = useRef(false);
+
   /**
    * Сохранить токен и настроить axios
    */
   const saveToken = useCallback((token) => {
     setAccessToken(token);
-    // Добавляем токен в заголовки axios
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
   }, []);
 
@@ -56,23 +58,29 @@ export const AuthProvider = ({ children }) => {
       async (error) => {
         const originalRequest = error.config;
 
-        // Если 401 и это не повторный запрос
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Если 401 и это не повторный запрос и не идёт refresh и это не сам refresh запрос
+        if (
+          error.response?.status === 401 &&
+          !originalRequest._retry &&
+          !refreshingRef.current &&
+          !originalRequest.url.includes("/auth/refresh")
+        ) {
           originalRequest._retry = true;
+          refreshingRef.current = true;
 
           try {
-            // Пробуем обновить токен
             const response = await authApi.refresh();
             const newToken = response.data.accessToken;
 
-            // Сохраняем новый токен
             saveToken(newToken);
+            refreshingRef.current = false;
 
             // Повторяем оригинальный запрос с новым токеном
             originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
             return api(originalRequest);
           } catch (refreshError) {
             // Если refresh не удался - выходим
+            refreshingRef.current = false;
             clearToken();
             setUser(null);
             return Promise.reject(refreshError);
@@ -83,6 +91,7 @@ export const AuthProvider = ({ children }) => {
       }
     );
 
+    // Cleanup при размонтировании
     return () => {
       api.interceptors.response.eject(interceptor);
     };
@@ -161,13 +170,13 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Пробуем загрузить текущего пользователя
-        // Если есть refresh token в cookie - он автоматически используется
+        // Пытаемся обновить токен (если есть refresh token в cookie)
         const response = await authApi.refresh();
         saveToken(response.data.accessToken);
         await loadUser();
       } catch (error) {
-        // Пользователь не авторизован
+        // Если ошибка - значит пользователь не авторизован
+        // Это нормально для первого захода
         clearToken();
         setUser(null);
       } finally {
