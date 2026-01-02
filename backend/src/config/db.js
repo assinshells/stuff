@@ -16,10 +16,7 @@ class Database {
   constructor() {
     this.isConnected = false;
 
-    // Отключаем устаревшие режимы
-    mongoose.set("strictQuery", false);
-
-    // События подключения
+    // Настройка обработчиков событий
     this.setupEventListeners();
   }
 
@@ -47,6 +44,11 @@ class Database {
       await this.disconnect();
       process.exit(0);
     });
+
+    process.on("SIGTERM", async () => {
+      await this.disconnect();
+      process.exit(0);
+    });
   }
 
   /**
@@ -54,12 +56,22 @@ class Database {
    */
   async connect() {
     try {
-      await mongoose.connect(config.db.uri, config.db.options);
+      // Настройки подключения
+      const options = {
+        ...config.db.options,
+        // Дополнительные настройки для production
+        autoIndex: config.isDevelopment, // Отключаем автоиндексацию в production
+        serverSelectionTimeoutMS: 5000, // Таймаут выбора сервера
+      };
+
+      await mongoose.connect(config.db.uri, options);
       logger.info("Database connection established");
     } catch (error) {
       logger.error("Failed to connect to database:", error);
+
       // В production не падаем сразу, даем время на переподключение
       if (config.isProduction) {
+        logger.info("Retrying database connection in 5 seconds...");
         setTimeout(() => this.connect(), 5000);
       } else {
         process.exit(1);
@@ -83,10 +95,18 @@ class Database {
    * Проверка состояния подключения
    */
   getStatus() {
+    const states = {
+      0: "disconnected",
+      1: "connected",
+      2: "connecting",
+      3: "disconnecting",
+    };
+
     return {
       connected: this.isConnected,
-      readyState: mongoose.connection.readyState,
+      readyState: states[mongoose.connection.readyState] || "unknown",
       host: mongoose.connection.host,
+      name: mongoose.connection.name,
     };
   }
 }

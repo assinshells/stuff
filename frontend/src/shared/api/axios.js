@@ -26,10 +26,10 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     // Можно добавить токен авторизации
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
     // Логируем запросы в development
     if (import.meta.env.DEV) {
@@ -49,7 +49,7 @@ api.interceptors.request.use(
  */
 api.interceptors.response.use(
   (response) => {
-    // Успешный ответ - возвращаем только data
+    // Успешный ответ
     if (import.meta.env.DEV) {
       console.log(
         `✅ ${response.config.method.toUpperCase()} ${response.config.url}`,
@@ -57,7 +57,9 @@ api.interceptors.response.use(
       );
     }
 
-    return response.data;
+    // Возвращаем весь response, но с удобным доступом к data
+    // Теперь можно использовать: response.data, response.headers, response.status
+    return response;
   },
   (error) => {
     // Обработка ошибок
@@ -65,13 +67,15 @@ api.interceptors.response.use(
       message: "An error occurred",
       code: "UNKNOWN_ERROR",
       status: error.response?.status,
+      original: error,
     };
 
     if (error.response) {
       // Сервер ответил с ошибкой
       const { data, status } = error.response;
 
-      customError.message = data?.error?.message || "Server error";
+      customError.message =
+        data?.error?.message || data?.message || "Server error";
       customError.code = data?.error?.code || "SERVER_ERROR";
       customError.status = status;
       customError.errors = data?.error?.errors; // Валидация
@@ -88,16 +92,19 @@ api.interceptors.response.use(
 
       // Специальная обработка статусов
       if (status === 401) {
-        // Unauthorized - можно редиректить на логин
+        // Unauthorized - редиректим на логин
         customError.message = "Please log in to continue";
+        // Можно добавить редирект
+        // window.location.href = '/login';
+        // Или очистить токен
+        localStorage.removeItem("token");
       } else if (status === 403) {
-        // Forbidden
         customError.message = "You do not have permission";
       } else if (status === 404) {
-        // Not Found
         customError.message = "Resource not found";
+      } else if (status === 422) {
+        customError.message = "Validation failed";
       } else if (status >= 500) {
-        // Server errors
         customError.message = "Server error. Please try again later";
       }
     } else if (error.request) {

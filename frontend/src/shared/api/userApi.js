@@ -19,7 +19,8 @@ export const userApi = {
    * @returns {Promise<Object>} - Список пользователей с пагинацией
    */
   getAll: async (params = {}) => {
-    return api.get("/users", { params });
+    const response = await api.get("/users", { params });
+    return response.data; // Возвращаем только data
   },
 
   /**
@@ -28,7 +29,8 @@ export const userApi = {
    * @returns {Promise<Object>} - Данные пользователя
    */
   getById: async (id) => {
-    return api.get(`/users/${id}`);
+    const response = await api.get(`/users/${id}`);
+    return response.data;
   },
 
   /**
@@ -37,7 +39,8 @@ export const userApi = {
    * @returns {Promise<Object>} - Созданный пользователь
    */
   create: async (userData) => {
-    return api.post("/users", userData);
+    const response = await api.post("/users", userData);
+    return response.data;
   },
 
   /**
@@ -47,7 +50,8 @@ export const userApi = {
    * @returns {Promise<Object>} - Обновленный пользователь
    */
   update: async (id, userData) => {
-    return api.put(`/users/${id}`, userData);
+    const response = await api.put(`/users/${id}`, userData);
+    return response.data;
   },
 
   /**
@@ -56,7 +60,8 @@ export const userApi = {
    * @returns {Promise<Object>} - Результат удаления
    */
   delete: async (id) => {
-    return api.delete(`/users/${id}`);
+    const response = await api.delete(`/users/${id}`);
+    return response.data;
   },
 
   /**
@@ -64,7 +69,8 @@ export const userApi = {
    * @returns {Promise<Object>} - Статистика
    */
   getStats: async () => {
-    return api.get("/users/stats");
+    const response = await api.get("/users/stats");
+    return response.data;
   },
 };
 

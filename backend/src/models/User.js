@@ -7,7 +7,6 @@ import mongoose from "mongoose";
  * - Индексы для быстрого поиска
  * - Автоматические timestamps
  * - Виртуальные поля
- * - Хуки для обработки данных
  * - Методы экземпляра и статические методы
  */
 
@@ -33,6 +32,7 @@ const userSchema = new mongoose.Schema(
         /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
         "Please provide a valid email",
       ],
+      index: true, // Индекс для быстрого поиска
     },
 
     // Возраст (опциональный)
@@ -45,14 +45,19 @@ const userSchema = new mongoose.Schema(
     // Роль пользователя
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: {
+        values: ["user", "admin"],
+        message: "{VALUE} is not a valid role",
+      },
       default: "user",
+      index: true, // Индекс для фильтрации по роли
     },
 
     // Активность аккаунта
     isActive: {
       type: Boolean,
       default: true,
+      index: true, // Индекс для фильтрации по статусу
     },
   },
   {
@@ -61,6 +66,18 @@ const userSchema = new mongoose.Schema(
 
     // Настройки toJSON для скрытия внутренних полей
     toJSON: {
+      virtuals: true,
+      transform: function (doc, ret) {
+        ret.id = ret._id;
+        delete ret._id;
+        delete ret.__v;
+        return ret;
+      },
+    },
+
+    // Также настройки toObject
+    toObject: {
+      virtuals: true,
       transform: function (doc, ret) {
         ret.id = ret._id;
         delete ret._id;
@@ -73,9 +90,9 @@ const userSchema = new mongoose.Schema(
 
 // ============= ИНДЕКСЫ =============
 
-// Индекс для быстрого поиска по email (уже есть unique)
-// Составные индексы для частых запросов
+// Составной индекс для частых запросов
 userSchema.index({ isActive: 1, createdAt: -1 });
+userSchema.index({ role: 1, isActive: 1 });
 
 // ============= ВИРТУАЛЬНЫЕ ПОЛЯ =============
 
@@ -87,24 +104,12 @@ userSchema.virtual("ageGroup").get(function () {
   return "Senior";
 });
 
-// ============= ХУКИ (MIDDLEWARE) =============
-
-// Pre-save hook - выполняется перед сохранением
-userSchema.pre("save", function (next) {
-  // Можно добавить логику, например хеширование пароля
-  console.log("Saving user:", this.email);
-  next();
-});
-
-// Post-save hook - после сохранения
-userSchema.post("save", function (doc, next) {
-  console.log("User saved:", doc.email);
-  next();
-});
-
 // ============= МЕТОДЫ ЭКЗЕМПЛЯРА =============
 
-// Метод для получения публичной информации
+/**
+ * Получить публичную информацию о пользователе
+ * @returns {Object} Публичные данные пользователя
+ */
 userSchema.methods.getPublicProfile = function () {
   return {
     id: this._id,
@@ -114,17 +119,71 @@ userSchema.methods.getPublicProfile = function () {
   };
 };
 
-// ============= СТАТИЧЕСКИЕ МЕТОДЫ =============
-
-// Поиск активных пользователей
-userSchema.statics.findActive = function () {
-  return this.find({ isActive: true });
+/**
+ * Проверить, является ли пользователь админом
+ * @returns {Boolean}
+ */
+userSchema.methods.isAdmin = function () {
+  return this.role === "admin";
 };
 
-// Подсчет по ролям
+// ============= СТАТИЧЕСКИЕ МЕТОДЫ =============
+
+/**
+ * Найти активных пользователей
+ * @returns {Promise<Array>} Массив активных пользователей
+ */
+userSchema.statics.findActive = function () {
+  return this.find({ isActive: true }).sort({ createdAt: -1 });
+};
+
+/**
+ * Подсчитать пользователей по роли
+ * @param {String} role - Роль пользователя
+ * @returns {Promise<Number>} Количество пользователей
+ */
 userSchema.statics.countByRole = function (role) {
   return this.countDocuments({ role });
 };
+
+/**
+ * Найти пользователя по email (case-insensitive)
+ * @param {String} email - Email пользователя
+ * @returns {Promise<Object>} Пользователь или null
+ */
+userSchema.statics.findByEmail = function (email) {
+  return this.findOne({ email: email.toLowerCase() });
+};
+
+// ============= MIDDLEWARE (HOOKS) =============
+
+/**
+ * Pre-save hook - выполняется перед сохранением
+ * Можно использовать для дополнительной обработки
+ */
+userSchema.pre("save", function (next) {
+  // Пример: нормализация email
+  if (this.isModified("email")) {
+    this.email = this.email.toLowerCase().trim();
+  }
+
+  next();
+});
+
+/**
+ * Pre-remove hook - выполняется перед удалением
+ * Можно использовать для очистки связанных данных
+ */
+userSchema.pre(
+  "deleteOne",
+  { document: true, query: false },
+  async function (next) {
+    // Пример: удаление связанных документов
+    // await RelatedModel.deleteMany({ userId: this._id });
+
+    next();
+  }
+);
 
 // Создание модели
 const User = mongoose.model("User", userSchema);

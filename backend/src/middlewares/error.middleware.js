@@ -1,5 +1,5 @@
 import { config } from "../config/env.js";
-import { logError } from "../utils/logger.js";
+import logger, { logError } from "../utils/logger.js";
 import { AppError } from "../utils/errors.js";
 
 /**
@@ -10,7 +10,7 @@ import { AppError } from "../utils/errors.js";
  * - Логирование ошибок
  * - Форматирование ответа клиенту
  * - Скрытие деталей в production
- * - Обработка специфичных ошибок (MongoDB, Validation)
+ * - Обработка специфичных ошибок (MongoDB, Validation, JWT)
  */
 
 /**
@@ -20,10 +20,11 @@ const handleMongoError = (err) => {
   // Дубликат ключа (E11000)
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern)[0];
+    const value = err.keyValue[field];
     return {
       statusCode: 409,
       code: "DUPLICATE_KEY",
-      message: `${field} already exists`,
+      message: `${field} '${value}' already exists`,
     };
   }
 
@@ -32,6 +33,7 @@ const handleMongoError = (err) => {
     const errors = Object.values(err.errors).map((e) => ({
       field: e.path,
       message: e.message,
+      value: e.value,
     }));
 
     return {
@@ -55,6 +57,29 @@ const handleMongoError = (err) => {
 };
 
 /**
+ * Обработчик JWT ошибок
+ */
+const handleJWTError = (err) => {
+  if (err.name === "JsonWebTokenError") {
+    return {
+      statusCode: 401,
+      code: "INVALID_TOKEN",
+      message: "Invalid token",
+    };
+  }
+
+  if (err.name === "TokenExpiredError") {
+    return {
+      statusCode: 401,
+      code: "TOKEN_EXPIRED",
+      message: "Token has expired",
+    };
+  }
+
+  return null;
+};
+
+/**
  * Главный обработчик ошибок
  */
 export const errorHandler = (err, req, res, next) => {
@@ -63,7 +88,8 @@ export const errorHandler = (err, req, res, next) => {
     url: req.url,
     method: req.method,
     ip: req.ip,
-    body: req.body,
+    userAgent: req.get("user-agent"),
+    body: config.isDevelopment ? req.body : undefined, // Только в dev
   });
 
   // Базовые значения
@@ -84,36 +110,60 @@ export const errorHandler = (err, req, res, next) => {
     const mongoError = handleMongoError(err);
     if (mongoError) {
       ({ statusCode, code, message, errors } = mongoError);
+    } else {
+      // Обработка JWT ошибок
+      const jwtError = handleJWTError(err);
+      if (jwtError) {
+        ({ statusCode, code, message } = jwtError);
+      }
     }
   }
 
-  // В development показываем стек
+  // Формируем ответ
   const response = {
     success: false,
     error: {
       code,
       message,
       ...(errors && { errors }),
+      // В development показываем стек и дополнительную информацию
       ...(config.isDevelopment && {
         stack: err.stack,
         raw: err.message,
+        name: err.name,
       }),
     },
   };
 
+  // Отправляем ответ
   res.status(statusCode).json(response);
 };
 
 /**
  * Обработчик 404 (роут не найден)
- * Должен быть последним в цепочке middleware
+ * Должен быть последним в цепочке middleware, перед errorHandler
  */
 export const notFoundHandler = (req, res) => {
+  logger.warn(`Route not found: ${req.method} ${req.url}`);
+
   res.status(404).json({
     success: false,
     error: {
       code: "NOT_FOUND",
       message: `Route ${req.method} ${req.url} not found`,
+      availableEndpoints: config.isDevelopment
+        ? {
+            users: {
+              getAll: "GET /api/users",
+              getById: "GET /api/users/:id",
+              create: "POST /api/users",
+              update: "PUT /api/users/:id",
+              delete: "DELETE /api/users/:id",
+              stats: "GET /api/users/stats",
+            },
+            health: "GET /health",
+          }
+        : undefined,
     },
   });
 };

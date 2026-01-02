@@ -50,12 +50,10 @@ export const ErrorAlert = ({ message, onRetry, onDismiss }) => {
         <div className="flex-grow-1">
           <strong>Error:</strong> {message}
         </div>
-        <div>
+        <div className="d-flex gap-2">
           {onRetry && (
-            <button
-              className="btn btn-sm btn-outline-danger me-2"
-              onClick={onRetry}
-            >
+            <button className="btn btn-sm btn-outline-danger" onClick={onRetry}>
+              <i className="bi bi-arrow-clockwise me-1"></i>
               Retry
             </button>
           )}
@@ -100,31 +98,42 @@ export const SuccessAlert = ({ message, onDismiss }) => {
 
 /**
  * Notification Toast
+ * Отображается в правом верхнем углу
  */
 export const NotificationToast = ({ notification, onDismiss }) => {
   if (!notification) return null;
 
-  const bgClass =
-    {
-      success: "bg-success",
-      error: "bg-danger",
-      warning: "bg-warning",
-      info: "bg-info",
-    }[notification.type] || "bg-info";
+  const config = {
+    success: {
+      bg: "bg-success",
+      icon: "bi-check-circle-fill",
+    },
+    error: {
+      bg: "bg-danger",
+      icon: "bi-exclamation-triangle-fill",
+    },
+    warning: {
+      bg: "bg-warning",
+      icon: "bi-exclamation-circle-fill",
+    },
+    info: {
+      bg: "bg-info",
+      icon: "bi-info-circle-fill",
+    },
+  };
 
-  const iconClass =
-    {
-      success: "bi-check-circle-fill",
-      error: "bi-exclamation-triangle-fill",
-      warning: "bi-exclamation-circle-fill",
-      info: "bi-info-circle-fill",
-    }[notification.type] || "bi-info-circle-fill";
+  const { bg, icon } = config[notification.type] || config.info;
 
   return (
     <div className="position-fixed top-0 end-0 p-3" style={{ zIndex: 9999 }}>
-      <div className={`toast show ${bgClass} text-white`} role="alert">
+      <div
+        className={`toast show ${bg} text-white`}
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
         <div className="toast-header">
-          <i className={`bi ${iconClass} me-2`}></i>
+          <i className={`bi ${icon} me-2`}></i>
           <strong className="me-auto text-capitalize">
             {notification.type}
           </strong>
@@ -143,6 +152,7 @@ export const NotificationToast = ({ notification, onDismiss }) => {
 
 /**
  * Empty State
+ * Отображается когда нет данных
  */
 export const EmptyState = ({
   icon = "bi-inbox",
@@ -152,14 +162,73 @@ export const EmptyState = ({
 }) => {
   return (
     <div className="text-center py-5">
-      <i className={`bi ${icon} display-1 text-muted`}></i>
-      <h4 className="mt-3">{title}</h4>
-      <p className="text-muted">{message}</p>
+      <i className={`bi ${icon} display-1 text-muted mb-3`}></i>
+      <h4 className="mb-2">{title}</h4>
+      <p className="text-muted mb-4">{message}</p>
       {action && (
-        <button className="btn btn-primary mt-3" onClick={action.onClick}>
+        <button className="btn btn-primary" onClick={action.onClick}>
+          <i className={`bi ${action.icon || "bi-plus-lg"} me-2`}></i>
           {action.label}
         </button>
       )}
+    </div>
+  );
+};
+
+/**
+ * Confirmation Modal
+ * Для подтверждения действий
+ */
+export const ConfirmModal = ({
+  show,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  variant = "danger", // primary, danger, warning
+}) => {
+  if (!show) return null;
+
+  return (
+    <div
+      className="modal show d-block"
+      tabIndex="-1"
+      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+    >
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">{title}</h5>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={onCancel}
+              aria-label="Close"
+            ></button>
+          </div>
+          <div className="modal-body">
+            <p>{message}</p>
+          </div>
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onCancel}
+            >
+              {cancelText}
+            </button>
+            <button
+              type="button"
+              className={`btn btn-${variant}`}
+              onClick={onConfirm}
+            >
+              {confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

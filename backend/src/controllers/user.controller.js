@@ -9,31 +9,30 @@ import { NotFoundError, ConflictError } from "../utils/errors.js";
  * - Обработку запроса
  * - Вызов нужных методов модели
  * - Формирование ответа
+ *
+ * Благодаря express-async-errors, не нужно оборачивать в try/catch
  */
 
 /**
- * Получить всех пользователей
- * GET /api/users
+ * Получить всех пользователей с пагинацией и фильтрацией
+ * GET /api/users?page=1&limit=10&role=admin&isActive=true
  */
 export const getAllUsers = async (req, res) => {
-  // Пагинация и фильтрация
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  // Пагинация
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
   const skip = (page - 1) * limit;
 
   // Фильтры
   const filter = {};
   if (req.query.role) filter.role = req.query.role;
-  if (req.query.isActive !== undefined)
+  if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === "true";
+  }
 
-  // Запрос к БД
+  // Выполняем запросы параллельно
   const [users, total] = await Promise.all([
-    User.find(filter)
-      .limit(limit)
-      .skip(skip)
-      .sort({ createdAt: -1 }) // Новые первыми
-      .lean(), // Для производительности
+    User.find(filter).limit(limit).skip(skip).sort({ createdAt: -1 }).lean(), // Для производительности
     User.countDocuments(filter),
   ]);
 
@@ -46,6 +45,8 @@ export const getAllUsers = async (req, res) => {
         limit,
         total,
         pages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
       },
     },
   });
@@ -56,9 +57,7 @@ export const getAllUsers = async (req, res) => {
  * GET /api/users/:id
  */
 export const getUserById = async (req, res) => {
-  const { id } = req.params;
-
-  const user = await User.findById(id);
+  const user = await User.findById(req.params.id);
 
   if (!user) {
     throw new NotFoundError("User not found");
@@ -73,12 +72,13 @@ export const getUserById = async (req, res) => {
 /**
  * Создать нового пользователя
  * POST /api/users
+ * Body: { name, email, age?, role? }
  */
 export const createUser = async (req, res) => {
   const { name, email, age, role } = req.body;
 
   // Проверка на существование email
-  const existingUser = await User.findOne({ email });
+  const existingUser = await User.findByEmail(email);
   if (existingUser) {
     throw new ConflictError("Email already exists");
   }
@@ -94,12 +94,14 @@ export const createUser = async (req, res) => {
   res.status(201).json({
     success: true,
     data: user,
+    message: "User created successfully",
   });
 };
 
 /**
  * Обновить пользователя
  * PUT /api/users/:id
+ * Body: { name?, email?, age?, role?, isActive? }
  */
 export const updateUser = async (req, res) => {
   const { id } = req.params;
@@ -108,8 +110,8 @@ export const updateUser = async (req, res) => {
   // Проверяем уникальность email если он меняется
   if (updates.email) {
     const existingUser = await User.findOne({
-      email: updates.email,
-      _id: { $ne: id }, // Исключаем текущего пользователя
+      email: updates.email.toLowerCase(),
+      _id: { $ne: id },
     });
 
     if (existingUser) {
@@ -117,6 +119,7 @@ export const updateUser = async (req, res) => {
     }
   }
 
+  // Обновляем пользователя
   const user = await User.findByIdAndUpdate(id, updates, {
     new: true, // Вернуть обновленный документ
     runValidators: true, // Запустить валидаторы схемы
@@ -129,6 +132,7 @@ export const updateUser = async (req, res) => {
   res.json({
     success: true,
     data: user,
+    message: "User updated successfully",
   });
 };
 
@@ -137,9 +141,7 @@ export const updateUser = async (req, res) => {
  * DELETE /api/users/:id
  */
 export const deleteUser = async (req, res) => {
-  const { id } = req.params;
-
-  const user = await User.findByIdAndDelete(id);
+  const user = await User.findByIdAndDelete(req.params.id);
 
   if (!user) {
     throw new NotFoundError("User not found");
@@ -147,7 +149,10 @@ export const deleteUser = async (req, res) => {
 
   res.json({
     success: true,
-    data: { message: "User deleted successfully" },
+    data: {
+      id: user._id,
+      message: "User deleted successfully",
+    },
   });
 };
 
@@ -156,20 +161,34 @@ export const deleteUser = async (req, res) => {
  * GET /api/users/stats
  */
 export const getUserStats = async (req, res) => {
-  const [total, activeCount, adminCount] = await Promise.all([
-    User.countDocuments(),
-    User.countDocuments({ isActive: true }),
-    User.countByRole("admin"),
+  // Используем aggregation для эффективного подсчета
+  const stats = await User.aggregate([
+    {
+      $facet: {
+        total: [{ $count: "count" }],
+        byRole: [{ $group: { _id: "$role", count: { $sum: 1 } } }],
+        byStatus: [{ $group: { _id: "$isActive", count: { $sum: 1 } } }],
+      },
+    },
   ]);
+
+  // Форматируем результат
+  const result = {
+    total: stats[0].total[0]?.count || 0,
+    byRole: {},
+    byStatus: {},
+  };
+
+  stats[0].byRole.forEach((item) => {
+    result.byRole[item._id] = item.count;
+  });
+
+  stats[0].byStatus.forEach((item) => {
+    result.byStatus[item._id ? "active" : "inactive"] = item.count;
+  });
 
   res.json({
     success: true,
-    data: {
-      total,
-      active: activeCount,
-      inactive: total - activeCount,
-      admins: adminCount,
-      users: total - adminCount,
-    },
+    data: result,
   });
 };
