@@ -1,26 +1,17 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import "express-async-errors"; // Автоматическая обработка async ошибок
+import cookieParser from "cookie-parser";
+import "express-async-errors";
 import { config } from "./config/env.js";
 import { httpLogger } from "./utils/logger.js";
 import {
   errorHandler,
   notFoundHandler,
 } from "./middlewares/error.middleware.js";
+import { apiLimiter } from "./middlewares/rateLimit.middleware.js";
+import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
-
-/**
- * Express приложение
- *
- * Архитектура:
- * 1. Security middleware (helmet, cors)
- * 2. Парсинг тела запроса
- * 3. Логирование
- * 4. Роуты
- * 5. Обработка 404
- * 6. Обработка ошибок
- */
 
 const app = express();
 
@@ -39,11 +30,16 @@ app.use(express.json({ limit: "10mb" }));
 
 // URL-encoded данные (формы)
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
 
 // ============= ЛОГИРОВАНИЕ =============
 
 // HTTP запросы
 app.use(httpLogger);
+
+// ============= RATE LIMITING =============
+
+app.use("/api/", apiLimiter);
 
 // ============= HEALTH CHECK =============
 
@@ -69,6 +65,7 @@ app.get("/health", (req, res) => {
  * API v1
  * Версионирование API для обратной совместимости
  */
+app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
 // Дополнительные роуты можно добавить здесь
@@ -85,6 +82,7 @@ app.get("/", (req, res) => {
       version: "1.0.0",
       endpoints: {
         health: "/health",
+        auth: "/api/auth",
         users: "/api/users",
       },
     },

@@ -13,6 +13,11 @@ import {
   validateParams,
   validateQuery,
 } from "../middlewares/validate.middleware.js";
+import {
+  requireAuth,
+  requireAdmin,
+  requireOwnerOrAdmin,
+} from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
