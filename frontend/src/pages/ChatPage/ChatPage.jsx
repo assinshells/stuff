@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../../features/auth/AuthContext";
 
 /**
  * ChatPage - главная страница с чатом

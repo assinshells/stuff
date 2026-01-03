@@ -9,20 +9,46 @@ const api = axios.create({
   withCredentials: true,
 });
 
-const SENSITIVE_FIELDS = ["password", "token", "accessToken", "refreshToken"];
+// ⚠️ УЛУЧШЕНО: Расширен список чувствительных полей
+const SENSITIVE_FIELDS = [
+  "password",
+  "newPassword",
+  "oldPassword",
+  "confirmPassword",
+  "token",
+  "accessToken",
+  "refreshToken",
+  "captchaToken",
+  "resetToken",
+  "verificationToken",
+];
 
+/**
+ * Рекурсивно скрывает чувствительные данные
+ */
 const sanitizeData = (data) => {
   if (!data || typeof data !== "object") return data;
 
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeData(item));
+  }
+
   const sanitized = { ...data };
-  for (const key of SENSITIVE_FIELDS) {
-    if (sanitized[key]) {
+  for (const key in sanitized) {
+    if (
+      SENSITIVE_FIELDS.some((field) =>
+        key.toLowerCase().includes(field.toLowerCase())
+      )
+    ) {
       sanitized[key] = "***REDACTED***";
+    } else if (typeof sanitized[key] === "object") {
+      sanitized[key] = sanitizeData(sanitized[key]);
     }
   }
   return sanitized;
 };
 
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     if (import.meta.env.DEV) {
@@ -35,10 +61,14 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    if (import.meta.env.DEV) {
+      console.error("❌ Request Error:", error);
+    }
     return Promise.reject(error);
   }
 );
 
+// Response interceptor
 api.interceptors.response.use(
   (response) => {
     if (import.meta.env.DEV) {
@@ -59,6 +89,7 @@ api.interceptors.response.use(
     };
 
     if (error.response) {
+      // Server responded with error status
       const { data, status } = error.response;
 
       customError.message =
@@ -76,21 +107,34 @@ api.interceptors.response.use(
         );
       }
 
+      // Friendly messages for common status codes
       if (status === 403) {
         customError.message = "You do not have permission";
       } else if (status === 404) {
         customError.message = "Resource not found";
       } else if (status === 422) {
-        customError.message = "Validation failed";
+        customError.message = data?.error?.message || "Validation failed";
+      } else if (status === 429) {
+        customError.message = "Too many requests. Please try again later";
       } else if (status >= 500) {
         customError.message = "Server error. Please try again later";
       }
     } else if (error.request) {
+      // Request made but no response received
       customError.message = "No response from server. Check your connection";
       customError.code = "NO_RESPONSE";
+
+      if (import.meta.env.DEV) {
+        console.error("❌ No response:", error.request);
+      }
     } else {
-      customError.message = error.message;
+      // Error in request setup
+      customError.message = error.message || "Request failed";
       customError.code = "REQUEST_ERROR";
+
+      if (import.meta.env.DEV) {
+        console.error("❌ Request setup error:", error.message);
+      }
     }
 
     return Promise.reject(customError);

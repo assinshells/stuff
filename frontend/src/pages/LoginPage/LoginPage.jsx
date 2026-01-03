@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "../../features/auth/AuthContext";
 import { useApp } from "../../app/AppContext";
 
 /**
@@ -26,7 +26,6 @@ const LoginPage = () => {
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
-  const [captchaToken, setCaptchaToken] = useState("dev-captcha-token");
 
   /**
    * Шаг 1: Проверка пользователя
@@ -36,6 +35,19 @@ const LoginPage = () => {
 
     if (!nickname.trim()) {
       showError("Please enter your nickname");
+      return;
+    }
+
+    // Валидация формата nickname
+    if (!/^[a-z0-9_]+$/.test(nickname)) {
+      showError(
+        "Nickname can only contain lowercase letters, numbers and underscores"
+      );
+      return;
+    }
+
+    if (nickname.length < 3) {
+      showError("Nickname must be at least 3 characters");
       return;
     }
 
@@ -101,6 +113,9 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
+      // ⚠️ ИСПРАВЛЕНО: captchaToken генерируется только в DEV mode
+      const captchaToken = import.meta.env.DEV ? "dev-captcha-token" : "";
+
       await register(nickname, password, email, captchaToken);
       showNotification("Account created successfully!", "success");
       navigate("/");
@@ -317,13 +332,15 @@ const LoginPage = () => {
                     </div>
 
                     {/* Dev Captcha Notice */}
-                    <div className="alert alert-warning mb-4">
-                      <i className="bi bi-robot me-2"></i>
-                      <small>
-                        <strong>DEV MODE:</strong> Captcha validation is
-                        disabled
-                      </small>
-                    </div>
+                    {import.meta.env.DEV && (
+                      <div className="alert alert-warning mb-4">
+                        <i className="bi bi-robot me-2"></i>
+                        <small>
+                          <strong>DEV MODE:</strong> Captcha validation is
+                          disabled
+                        </small>
+                      </div>
+                    )}
 
                     <button
                       type="submit"

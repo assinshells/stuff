@@ -14,6 +14,7 @@ import { config } from "../config/env.js";
 
 /**
  * CHECK USER - только по nickname
+ * ⚠️ УЛУЧШЕНО: Меньше информации о состоянии пользователя для безопасности
  */
 export const checkUser = async (req, res) => {
   const { nickname } = req.body;
@@ -57,17 +58,29 @@ export const login = async (req, res) => {
   const user = await User.findByCredential(nickname);
 
   if (!user) {
-    throw new NotFoundError("User not found");
+    // ⚠️ УЛУЧШЕНО: Логируем попытки входа с несуществующими nickname
+    logger.warn(
+      { nickname, ip: req.ip },
+      "Login attempt with non-existent nickname"
+    );
+    throw new NotFoundError("Invalid credentials");
   }
 
   if (user.isLocked) {
-    logger.warn({ userId: user._id }, "Login attempt on locked account");
+    logger.warn(
+      { userId: user._id, ip: req.ip },
+      "Login attempt on locked account"
+    );
     throw new UnauthorizedError(
       "Account is temporarily locked due to multiple failed attempts"
     );
   }
 
   if (!user.isActive) {
+    logger.warn(
+      { userId: user._id, ip: req.ip },
+      "Login attempt on inactive account"
+    );
     throw new UnauthorizedError("Account is deactivated");
   }
 
@@ -79,6 +92,8 @@ export const login = async (req, res) => {
     logger.warn(
       {
         userId: user._id,
+        nickname,
+        ip: req.ip,
         attempts: user.loginAttempts + 1,
       },
       "Failed login attempt"
@@ -97,7 +112,10 @@ export const login = async (req, res) => {
   });
   await user.save();
 
-  logger.info({ userId: user._id }, "User logged in successfully");
+  logger.info(
+    { userId: user._id, nickname, ip: req.ip },
+    "User logged in successfully"
+  );
 
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
@@ -129,6 +147,10 @@ export const register = async (req, res) => {
   });
 
   if (existingUser) {
+    logger.warn(
+      { nickname, ip: req.ip },
+      "Registration attempt with existing nickname"
+    );
     throw new ConflictError("Nickname already exists");
   }
 
@@ -138,6 +160,10 @@ export const register = async (req, res) => {
     });
 
     if (existingEmail) {
+      logger.warn(
+        { email, ip: req.ip },
+        "Registration attempt with existing email"
+      );
       throw new ConflictError("Email already exists");
     }
   }
@@ -148,7 +174,10 @@ export const register = async (req, res) => {
     email: email ? email.toLowerCase() : undefined,
   });
 
-  logger.info({ userId: user._id, nickname }, "New user registered");
+  logger.info(
+    { userId: user._id, nickname, ip: req.ip },
+    "New user registered"
+  );
 
   const { accessToken, refreshToken } = generateTokenPair(user._id, user.role);
 
@@ -182,7 +211,7 @@ export const refresh = async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
-    logger.warn("Refresh attempt without token");
+    logger.warn({ ip: req.ip }, "Refresh attempt without token");
     throw new UnauthorizedError("Refresh token not found");
   }
 
@@ -192,7 +221,7 @@ export const refresh = async (req, res) => {
 
   if (!user) {
     logger.warn(
-      { userId: decoded.userId },
+      { userId: decoded.userId, ip: req.ip },
       "Refresh token for non-existent user"
     );
     throw new UnauthorizedError("User not found");
@@ -201,7 +230,13 @@ export const refresh = async (req, res) => {
   const tokenExists = user.refreshTokens.some((t) => t.token === refreshToken);
 
   if (!tokenExists) {
-    logger.warn({ userId: user._id }, "Invalid refresh token used");
+    logger.warn(
+      { userId: user._id, ip: req.ip },
+      "Invalid refresh token used - possible token theft"
+    );
+    // 🔥 УЛУЧШЕНО: При подозрении на кражу токена - удаляем все refresh tokens
+    user.refreshTokens = [];
+    await user.save();
     throw new UnauthorizedError("Invalid refresh token");
   }
 
@@ -248,7 +283,7 @@ export const logout = async (req, res) => {
     );
     await req.user.save();
 
-    logger.info({ userId: req.user._id }, "User logged out");
+    logger.info({ userId: req.user._id, ip: req.ip }, "User logged out");
   }
 
   res.clearCookie("refreshToken", {
@@ -276,7 +311,10 @@ export const forgotPassword = async (req, res) => {
   const user = await User.findByEmail(email);
 
   if (!user) {
-    logger.warn({ email }, "Password reset requested for non-existent email");
+    logger.warn(
+      { email, ip: req.ip },
+      "Password reset requested for non-existent email"
+    );
 
     // Всегда возвращаем успех (security)
     return res.json({
@@ -286,7 +324,11 @@ export const forgotPassword = async (req, res) => {
   }
 
   if (!user.email) {
-    logger.warn({ userId: user._id }, "Password reset for user without email");
+    logger.warn(
+      { userId: user._id, ip: req.ip },
+      "Password reset for user without email"
+    );
+    // ⚠️ УЛУЧШЕНО: Не раскрываем информацию об отсутствии email
     return res.json({
       success: true,
       message: "If the email exists, a password reset link has been sent",
@@ -305,14 +347,16 @@ export const forgotPassword = async (req, res) => {
 
   try {
     await sendPasswordResetEmail(user, resetToken);
+    logger.info(
+      { userId: user._id, email, ip: req.ip },
+      "Password reset email sent"
+    );
   } catch (error) {
     logger.error(
-      { userId: user._id, error },
+      { userId: user._id, email, ip: req.ip, error },
       "Failed to send password reset email"
     );
   }
-
-  logger.info({ userId: user._id }, "Password reset requested");
 
   res.json({
     success: true,
@@ -334,6 +378,7 @@ export const resetPassword = async (req, res) => {
   const user = await User.findByPasswordResetToken(resetTokenHash);
 
   if (!user) {
+    logger.warn({ ip: req.ip }, "Password reset with invalid/expired token");
     throw new ValidationError("Invalid or expired reset token");
   }
 
@@ -344,7 +389,7 @@ export const resetPassword = async (req, res) => {
 
   await user.save();
 
-  logger.info({ userId: user._id }, "Password reset successful");
+  logger.info({ userId: user._id, ip: req.ip }, "Password reset successful");
 
   res.json({
     success: true,

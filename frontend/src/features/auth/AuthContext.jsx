@@ -16,7 +16,9 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState(null);
 
+  // ⚠️ ИСПРАВЛЕНО: Используем ref для предотвращения race condition
   const refreshingRef = useRef(false);
+  const refreshPromiseRef = useRef(null);
 
   /**
    * Сохранить токен и настроить axios
@@ -51,6 +53,7 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Автоматическое обновление токена при ошибке 401
+   * ⚠️ ИСПРАВЛЕНО: Race condition fix с помощью Promise reuse
    */
   useEffect(() => {
     const interceptor = api.interceptors.response.use(
@@ -58,33 +61,55 @@ export const AuthProvider = ({ children }) => {
       async (error) => {
         const originalRequest = error.config;
 
-        // Если 401 и это не повторный запрос и не идёт refresh и это не сам refresh запрос
+        // Если 401 и это не повторный запрос и это не сам refresh запрос
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
-          !refreshingRef.current &&
           !originalRequest.url.includes("/auth/refresh")
         ) {
           originalRequest._retry = true;
-          refreshingRef.current = true;
 
-          try {
-            const response = await authApi.refresh();
-            const newToken = response.data.accessToken;
-
-            saveToken(newToken);
-            refreshingRef.current = false;
-
-            // Повторяем оригинальный запрос с новым токеном
-            originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
-            return api(originalRequest);
-          } catch (refreshError) {
-            // Если refresh не удался - выходим
-            refreshingRef.current = false;
-            clearToken();
-            setUser(null);
-            return Promise.reject(refreshError);
+          // Если уже идёт refresh - ждём его завершения
+          if (refreshingRef.current && refreshPromiseRef.current) {
+            try {
+              await refreshPromiseRef.current;
+              // После успешного refresh повторяем оригинальный запрос
+              return api(originalRequest);
+            } catch (refreshError) {
+              return Promise.reject(refreshError);
+            }
           }
+
+          // Начинаем новый refresh
+          refreshingRef.current = true;
+          refreshPromiseRef.current = (async () => {
+            try {
+              const response = await authApi.refresh();
+              const newToken = response.data.accessToken;
+
+              saveToken(newToken);
+
+              // Повторяем оригинальный запрос с новым токеном
+              originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
+              return api(originalRequest);
+            } catch (refreshError) {
+              // Если refresh не удался - выходим
+              clearToken();
+              setUser(null);
+
+              // ⚠️ УЛУЧШЕНО: Перенаправляем на login только если это не публичный маршрут
+              if (window.location.pathname !== "/login") {
+                window.location.href = "/login";
+              }
+
+              throw refreshError;
+            } finally {
+              refreshingRef.current = false;
+              refreshPromiseRef.current = null;
+            }
+          })();
+
+          return refreshPromiseRef.current;
         }
 
         return Promise.reject(error);
@@ -144,6 +169,7 @@ export const AuthProvider = ({ children }) => {
       await authApi.logout();
     } catch (error) {
       // Игнорируем ошибки при logout
+      console.error("Logout error:", error);
     } finally {
       clearToken();
       setUser(null);

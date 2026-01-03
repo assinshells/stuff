@@ -91,7 +91,8 @@ const resetPasswordSchema = Joi.object({
  */
 
 // POST /api/auth/check - проверить существование пользователя (только nickname)
-router.post("/check", validateBody(checkUserSchema), checkUser);
+// 🔥 ИСПРАВЛЕНО: Добавлен rate limiting для предотвращения перечисления пользователей
+router.post("/check", authLimiter, validateBody(checkUserSchema), checkUser);
 
 // POST /api/auth/login - войти (только nickname)
 router.post("/login", authLimiter, validateBody(loginSchema), login);
