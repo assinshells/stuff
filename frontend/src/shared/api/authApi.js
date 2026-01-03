@@ -6,19 +6,19 @@ import api from "./axios";
 
 export const authApi = {
   /**
-   * Проверить существование пользователя
+   * Проверить существование пользователя (только nickname)
    */
-  checkUser: async (credential) => {
-    const response = await api.post("/auth/check", { credential });
+  checkUser: async (nickname) => {
+    const response = await api.post("/auth/check", { nickname });
     return response.data;
   },
 
   /**
-   * Войти
+   * Войти (только nickname)
    */
-  login: async (credential, password) => {
+  login: async (nickname, password) => {
     const response = await api.post("/auth/login", {
-      credential,
+      nickname,
       password,
     });
     return response.data;
@@ -54,10 +54,10 @@ export const authApi = {
   },
 
   /**
-   * Запросить сброс пароля
+   * Запросить сброс пароля (только email)
    */
-  forgotPassword: async (credential) => {
-    const response = await api.post("/auth/forgot-password", { credential });
+  forgotPassword: async (email) => {
+    const response = await api.post("/auth/forgot-password", { email });
     return response.data;
   },
 

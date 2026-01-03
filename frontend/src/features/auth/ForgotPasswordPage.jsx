@@ -4,7 +4,7 @@ import { useAuth } from "./AuthContext";
 import { useApp } from "../../app/AppContext";
 
 /**
- * ForgotPasswordPage - запрос на сброс пароля
+ * ForgotPasswordPage - запрос на сброс пароля (только email)
  */
 
 const ForgotPasswordPage = () => {
@@ -12,22 +12,27 @@ const ForgotPasswordPage = () => {
   const { forgotPassword } = useAuth();
   const { showNotification, showError } = useApp();
 
-  const [credential, setCredential] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!credential.trim()) {
-      showError("Please enter your nickname or email");
+    if (!email.trim()) {
+      showError("Please enter your email");
+      return;
+    }
+
+    if (!email.match(/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/)) {
+      showError("Please enter a valid email");
       return;
     }
 
     setLoading(true);
 
     try {
-      await forgotPassword(credential);
+      await forgotPassword(email);
       setSuccess(true);
       showNotification(
         "Password reset instructions sent! Check your email (or console in DEV mode)",
@@ -98,25 +103,34 @@ const ForgotPasswordPage = () => {
                   </div>
                   <h2 className="fw-bold">Forgot Password?</h2>
                   <p className="text-muted">
-                    No worries! Enter your nickname or email and we'll send you
-                    reset instructions.
+                    Enter your email address and we'll send you reset
+                    instructions.
                   </p>
+                </div>
+
+                {/* Warning */}
+                <div className="alert alert-warning mb-4">
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  <small>
+                    <strong>Note:</strong> You must have provided an email
+                    during registration to reset your password.
+                  </small>
                 </div>
 
                 {/* Form */}
                 <form onSubmit={handleSubmit}>
                   <div className="mb-4">
-                    <label className="form-label">Nickname or Email</label>
+                    <label className="form-label">Email Address</label>
                     <div className="input-group input-group-lg">
                       <span className="input-group-text">
-                        <i className="bi bi-person"></i>
+                        <i className="bi bi-envelope"></i>
                       </span>
                       <input
-                        type="text"
+                        type="email"
                         className="form-control"
-                        placeholder="your_nickname or email@example.com"
-                        value={credential}
-                        onChange={(e) => setCredential(e.target.value)}
+                        placeholder="email@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         autoFocus
                         disabled={loading}
                       />
@@ -126,7 +140,7 @@ const ForgotPasswordPage = () => {
                   <button
                     type="submit"
                     className="btn btn-primary btn-lg w-100 mb-3"
-                    disabled={loading || !credential.trim()}
+                    disabled={loading || !email.trim()}
                   >
                     {loading ? (
                       <>
@@ -156,8 +170,8 @@ const ForgotPasswordPage = () => {
               <p className="text-muted">
                 <small>
                   <i className="bi bi-shield-check me-1"></i>
-                  For security reasons, we'll send instructions even if the user
-                  doesn't exist
+                  For security reasons, we'll send instructions even if the
+                  email doesn't exist
                 </small>
               </p>
             </div>

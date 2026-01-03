@@ -10,6 +10,7 @@ import ResetPasswordPage from "../features/auth/ResetPasswordPage";
 import ProfilePage from "../features/auth/ProfilePage";
 import ProtectedRoute, { AdminRoute } from "../features/auth/ProtectedRoute";
 import UserList from "../features/users/UserList";
+import ChatPage from "../features/chat/ChatPage";
 
 /**
  * Layout компонент для защищенных страниц
@@ -26,11 +27,14 @@ const AppLayout = ({ children }) => {
   return (
     <>
       {/* Navbar */}
-      <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div className="container">
+      <nav
+        className="navbar navbar-expand-lg navbar-dark bg-primary fixed-top"
+        style={{ zIndex: 1030 }}
+      >
+        <div className="container-fluid px-4">
           <a className="navbar-brand" href="/">
-            <i className="bi bi-layers me-2"></i>
-            {import.meta.env.VITE_APP_NAME || "Fullstack App"}
+            <i className="bi bi-chat-dots-fill me-2"></i>
+            {import.meta.env.VITE_APP_NAME || "Chat App"}
           </a>
           <button
             className="navbar-toggler"
@@ -44,8 +48,8 @@ const AppLayout = ({ children }) => {
             <ul className="navbar-nav me-auto">
               <li className="nav-item">
                 <a className="nav-link" href="/">
-                  <i className="bi bi-house me-1"></i>
-                  Home
+                  <i className="bi bi-chat-text me-1"></i>
+                  Chats
                 </a>
               </li>
               {user?.role === "admin" && (
@@ -103,19 +107,7 @@ const AppLayout = ({ children }) => {
       </nav>
 
       {/* Main Content */}
-      <main className="min-vh-100 bg-light">{children}</main>
-
-      {/* Footer */}
-      <footer className="bg-dark text-white py-4 mt-5">
-        <div className="container text-center">
-          <p className="mb-0">
-            &copy; {new Date().getFullYear()} Fullstack App.
-            <span className="ms-2">
-              v{import.meta.env.VITE_APP_VERSION || "1.0.0"}
-            </span>
-          </p>
-        </div>
-      </footer>
+      <main>{children}</main>
 
       <style>{`
         .avatar-circle {
@@ -127,95 +119,6 @@ const AppLayout = ({ children }) => {
         }
       `}</style>
     </>
-  );
-};
-
-/**
- * Home Page
- */
-const HomePage = () => {
-  const { user } = useAuth();
-
-  return (
-    <div className="container py-5">
-      <div className="row justify-content-center">
-        <div className="col-lg-8">
-          <div className="text-center mb-5">
-            <h1 className="display-4 fw-bold mb-3">
-              Welcome, {user?.nickname}! 👋
-            </h1>
-            <p className="lead text-muted">
-              You're successfully logged in to the fullstack application.
-            </p>
-          </div>
-
-          <div className="row g-4">
-            <div className="col-md-6">
-              <div className="card h-100 shadow-sm">
-                <div className="card-body text-center p-4">
-                  <i className="bi bi-person-circle display-1 text-primary mb-3"></i>
-                  <h5 className="card-title">Your Profile</h5>
-                  <p className="card-text text-muted">
-                    View and manage your account information
-                  </p>
-                  <a href="/profile" className="btn btn-primary">
-                    Go to Profile
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {user?.role === "admin" && (
-              <div className="col-md-6">
-                <div className="card h-100 shadow-sm">
-                  <div className="card-body text-center p-4">
-                    <i className="bi bi-people-fill display-1 text-danger mb-3"></i>
-                    <h5 className="card-title">Manage Users</h5>
-                    <p className="card-text text-muted">
-                      Admin panel for user management
-                    </p>
-                    <a href="/users" className="btn btn-danger">
-                      Manage Users
-                    </a>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="card mt-4 shadow-sm">
-            <div className="card-body">
-              <h5 className="card-title mb-3">
-                <i className="bi bi-shield-check me-2"></i>
-                Security Features
-              </h5>
-              <ul className="list-unstyled mb-0">
-                <li className="mb-2">
-                  <i className="bi bi-check-circle text-success me-2"></i>
-                  JWT Authentication with refresh tokens
-                </li>
-                <li className="mb-2">
-                  <i className="bi bi-check-circle text-success me-2"></i>
-                  Bcrypt password hashing
-                </li>
-                <li className="mb-2">
-                  <i className="bi bi-check-circle text-success me-2"></i>
-                  Rate limiting on authentication endpoints
-                </li>
-                <li className="mb-2">
-                  <i className="bi bi-check-circle text-success me-2"></i>
-                  HttpOnly cookies for secure token storage
-                </li>
-                <li className="mb-0">
-                  <i className="bi bi-check-circle text-success me-2"></i>
-                  Role-based access control (RBAC)
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 };
 
@@ -251,7 +154,7 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <AppLayout>
-                <HomePage />
+                <ChatPage />
               </AppLayout>
             </ProtectedRoute>
           }

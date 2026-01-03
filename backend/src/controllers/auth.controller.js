@@ -13,19 +13,15 @@ import logger from "../utils/logger.js";
 import { config } from "../config/env.js";
 
 /**
- * Auth Controller
- */
-
-/**
- * CHECK USER
+ * CHECK USER - только по nickname
  */
 export const checkUser = async (req, res) => {
-  const { credential } = req.body;
+  const { nickname } = req.body;
 
-  const user = await User.findByCredential(credential);
+  const user = await User.findByCredential(nickname);
 
   if (!user) {
-    logger.info({ credential }, "User not found - registration required");
+    logger.info({ nickname }, "User not found - registration required");
 
     return res.json({
       success: true,
@@ -37,10 +33,7 @@ export const checkUser = async (req, res) => {
     });
   }
 
-  logger.info(
-    { userId: user._id, credential },
-    "User found - password required"
-  );
+  logger.info({ userId: user._id, nickname }, "User found - password required");
 
   res.json({
     success: true,
@@ -50,19 +43,18 @@ export const checkUser = async (req, res) => {
       message: "User found. Please enter your password",
       user: {
         nickname: user.nickname,
-        email: user.email,
       },
     },
   });
 };
 
 /**
- * LOGIN
+ * LOGIN - только по nickname
  */
 export const login = async (req, res) => {
-  const { credential, password } = req.body;
+  const { nickname, password } = req.body;
 
-  const user = await User.findByCredential(credential);
+  const user = await User.findByCredential(nickname);
 
   if (!user) {
     throw new NotFoundError("User not found");
@@ -272,22 +264,32 @@ export const logout = async (req, res) => {
 };
 
 /**
- * FORGOT PASSWORD
+ * FORGOT PASSWORD - только по email
  */
 export const forgotPassword = async (req, res) => {
-  const { credential } = req.body;
+  const { email } = req.body;
 
-  const user = await User.findByCredential(credential);
+  if (!email) {
+    throw new ValidationError("Email is required for password reset");
+  }
+
+  const user = await User.findByEmail(email);
 
   if (!user) {
-    logger.warn(
-      { credential },
-      "Password reset requested for non-existent user"
-    );
+    logger.warn({ email }, "Password reset requested for non-existent email");
 
+    // Всегда возвращаем успех (security)
     return res.json({
       success: true,
-      message: "If the user exists, a password reset email has been sent",
+      message: "If the email exists, a password reset link has been sent",
+    });
+  }
+
+  if (!user.email) {
+    logger.warn({ userId: user._id }, "Password reset for user without email");
+    return res.json({
+      success: true,
+      message: "If the email exists, a password reset link has been sent",
     });
   }
 
@@ -314,7 +316,7 @@ export const forgotPassword = async (req, res) => {
 
   res.json({
     success: true,
-    message: "If the user exists, a password reset email has been sent",
+    message: "If the email exists, a password reset link has been sent",
   });
 };
 

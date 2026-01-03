@@ -24,14 +24,14 @@ const router = Router();
  */
 
 const checkUserSchema = Joi.object({
-  credential: Joi.string().required().trim().messages({
-    "string.empty": "Nickname or email is required",
+  nickname: Joi.string().required().trim().messages({
+    "string.empty": "Nickname is required",
   }),
 });
 
 const loginSchema = Joi.object({
-  credential: Joi.string().required().trim().messages({
-    "string.empty": "Nickname or email is required",
+  nickname: Joi.string().required().trim().messages({
+    "string.empty": "Nickname is required",
   }),
   password: Joi.string().required().messages({
     "string.empty": "Password is required",
@@ -68,8 +68,9 @@ const registerSchema = Joi.object({
 });
 
 const forgotPasswordSchema = Joi.object({
-  credential: Joi.string().required().trim().messages({
-    "string.empty": "Nickname or email is required",
+  email: Joi.string().email().required().trim().lowercase().messages({
+    "string.empty": "Email is required",
+    "string.email": "Please provide a valid email",
   }),
 });
 
@@ -89,10 +90,10 @@ const resetPasswordSchema = Joi.object({
  * Роуты
  */
 
-// POST /api/auth/check - проверить существование пользователя
+// POST /api/auth/check - проверить существование пользователя (только nickname)
 router.post("/check", validateBody(checkUserSchema), checkUser);
 
-// POST /api/auth/login - войти
+// POST /api/auth/login - войти (только nickname)
 router.post("/login", authLimiter, validateBody(loginSchema), login);
 
 // POST /api/auth/register - зарегистрироваться
@@ -104,7 +105,7 @@ router.post("/refresh", refresh);
 // POST /api/auth/logout - выйти
 router.post("/logout", requireAuth, logout);
 
-// POST /api/auth/forgot-password - запросить сброс пароля
+// POST /api/auth/forgot-password - запросить сброс пароля (только email)
 router.post(
   "/forgot-password",
   passwordResetLimiter,

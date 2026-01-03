@@ -127,7 +127,6 @@ userSchema.virtual("isLocked").get(function () {
 
 // ============= MIDDLEWARE (HOOKS) =============
 
-// Хеширование пароля перед сохранением
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) {
     return next();
@@ -142,13 +141,10 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-// Очистка старых refresh tokens
 userSchema.pre("save", function (next) {
-  // Максимум 5 активных токенов на пользователя
   const MAX_TOKENS = 5;
 
   if (this.refreshTokens && this.refreshTokens.length > MAX_TOKENS) {
-    // Удаляем самые старые токены
     this.refreshTokens = this.refreshTokens
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, MAX_TOKENS);
@@ -159,9 +155,6 @@ userSchema.pre("save", function (next) {
 
 // ============= МЕТОДЫ ЭКЗЕМПЛЯРА =============
 
-/**
- * Проверить пароль
- */
 userSchema.methods.comparePassword = async function (candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.password);
@@ -170,9 +163,6 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   }
 };
 
-/**
- * Увеличить счетчик неудачных попыток входа
- */
 userSchema.methods.incLoginAttempts = async function () {
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
@@ -193,9 +183,6 @@ userSchema.methods.incLoginAttempts = async function () {
   return this.updateOne(updates);
 };
 
-/**
- * Сбросить счетчик попыток входа
- */
 userSchema.methods.resetLoginAttempts = async function () {
   return this.updateOne({
     $set: { loginAttempts: 0, lastLogin: new Date() },
@@ -203,9 +190,6 @@ userSchema.methods.resetLoginAttempts = async function () {
   });
 };
 
-/**
- * Получить публичный профиль
- */
 userSchema.methods.getPublicProfile = function () {
   return {
     id: this._id,
@@ -217,34 +201,28 @@ userSchema.methods.getPublicProfile = function () {
   };
 };
 
-/**
- * Проверить роль
- */
 userSchema.methods.hasRole = function (...roles) {
   return roles.includes(this.role);
 };
 
 // ============= СТАТИЧЕСКИЕ МЕТОДЫ =============
 
-/**
- * Найти пользователя по nickname или email
- */
 userSchema.statics.findByCredential = function (credential) {
-  const query = credential.includes("@")
-    ? { email: credential.toLowerCase() }
-    : { nickname: credential.toLowerCase() };
-
-  return this.findOne(query).select("+password");
+  // Ищем только по nickname (без email)
+  return this.findOne({ nickname: credential.toLowerCase() }).select(
+    "+password"
+  );
 };
 
-/**
- * Найти по токену сброса пароля
- */
 userSchema.statics.findByPasswordResetToken = function (token) {
   return this.findOne({
     passwordResetToken: token,
     passwordResetExpires: { $gt: Date.now() },
   });
+};
+
+userSchema.statics.findByEmail = function (email) {
+  return this.findOne({ email: email.toLowerCase() });
 };
 
 const User = mongoose.model("User", userSchema);

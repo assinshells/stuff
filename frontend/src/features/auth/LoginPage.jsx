@@ -4,13 +4,13 @@ import { useAuth } from "./AuthContext";
 import { useApp } from "../../app/AppContext";
 
 /**
- * LoginPage - условный вход/регистрация
+ * LoginPage - вход/регистрация только по nickname
  *
  * Flow:
- * 1. Пользователь вводит nickname/email
- * 2. Проверяем существование (checkUser)
+ * 1. Пользователь вводит nickname
+ * 2. Проверяем существование
  * 3a. Существует → форма входа (пароль)
- * 3b. Не существует → форма регистрации (пароль + email + captcha)
+ * 3b. Не существует → форма регистрации (пароль + email)
  */
 
 const LoginPage = () => {
@@ -23,13 +23,10 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
 
   // Form Data
-  const [credential, setCredential] = useState("");
+  const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [captchaToken, setCaptchaToken] = useState("dev-captcha-token");
-
-  // User Info (при переходе к login)
-  const [userInfo, setUserInfo] = useState(null);
 
   /**
    * Шаг 1: Проверка пользователя
@@ -37,19 +34,18 @@ const LoginPage = () => {
   const handleCheckUser = async (e) => {
     e.preventDefault();
 
-    if (!credential.trim()) {
-      showError("Please enter your nickname or email");
+    if (!nickname.trim()) {
+      showError("Please enter your nickname");
       return;
     }
 
     setLoading(true);
 
     try {
-      const result = await checkUser(credential);
+      const result = await checkUser(nickname);
 
       if (result.exists) {
         // Пользователь найден → переход к login
-        setUserInfo(result.user);
         setStep("login");
       } else {
         // Пользователь не найден → переход к register
@@ -76,7 +72,7 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      await login(credential, password);
+      await login(nickname, password);
       showNotification("Welcome back!", "success");
       navigate("/");
     } catch (error) {
@@ -105,7 +101,7 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      await register(credential, password, email, captchaToken);
+      await register(nickname, password, email, captchaToken);
       showNotification("Account created successfully!", "success");
       navigate("/");
     } catch (error) {
@@ -122,7 +118,6 @@ const LoginPage = () => {
     setStep("check");
     setPassword("");
     setEmail("");
-    setUserInfo(null);
   };
 
   return (
@@ -135,7 +130,7 @@ const LoginPage = () => {
                 {/* Logo/Header */}
                 <div className="text-center mb-4">
                   <div className="mb-3">
-                    <i className="bi bi-shield-lock display-3 text-primary"></i>
+                    <i className="bi bi-chat-dots-fill display-3 text-primary"></i>
                   </div>
                   <h2 className="fw-bold">
                     {step === "check" && "Welcome"}
@@ -143,10 +138,8 @@ const LoginPage = () => {
                     {step === "register" && "Create Account"}
                   </h2>
                   <p className="text-muted">
-                    {step === "check" &&
-                      "Enter your nickname or email to continue"}
-                    {step === "login" &&
-                      `Hi, ${userInfo?.nickname || credential}`}
+                    {step === "check" && "Enter your nickname to continue"}
+                    {step === "login" && `Hi, ${nickname}`}
                     {step === "register" && "Complete your registration"}
                   </p>
                 </div>
@@ -155,7 +148,7 @@ const LoginPage = () => {
                 {step === "check" && (
                   <form onSubmit={handleCheckUser}>
                     <div className="mb-4">
-                      <label className="form-label">Nickname or Email</label>
+                      <label className="form-label">Nickname</label>
                       <div className="input-group input-group-lg">
                         <span className="input-group-text">
                           <i className="bi bi-person"></i>
@@ -163,19 +156,24 @@ const LoginPage = () => {
                         <input
                           type="text"
                           className="form-control"
-                          placeholder="your_nickname or email@example.com"
-                          value={credential}
-                          onChange={(e) => setCredential(e.target.value)}
+                          placeholder="your_nickname"
+                          value={nickname}
+                          onChange={(e) =>
+                            setNickname(e.target.value.toLowerCase())
+                          }
                           autoFocus
                           disabled={loading}
                         />
                       </div>
+                      <small className="form-text text-muted">
+                        Lowercase letters, numbers, and underscores only
+                      </small>
                     </div>
 
                     <button
                       type="submit"
                       className="btn btn-primary btn-lg w-100 mb-3"
-                      disabled={loading || !credential.trim()}
+                      disabled={loading || !nickname.trim()}
                     >
                       {loading ? (
                         <>
@@ -199,7 +197,7 @@ const LoginPage = () => {
                           <small className="text-muted d-block">
                             Logging in as
                           </small>
-                          <strong>{userInfo?.nickname || credential}</strong>
+                          <strong>{nickname}</strong>
                         </div>
                       </div>
                     </div>
@@ -264,8 +262,8 @@ const LoginPage = () => {
                   <form onSubmit={handleRegister}>
                     <div className="alert alert-info mb-4">
                       <i className="bi bi-info-circle me-2"></i>
-                      User <strong>{credential}</strong> not found. Let's create
-                      an account!
+                      Nickname <strong>{nickname}</strong> is available. Let's
+                      create an account!
                     </div>
 
                     <div className="mb-3">
@@ -275,7 +273,7 @@ const LoginPage = () => {
                       <input
                         type="text"
                         className="form-control"
-                        value={credential}
+                        value={nickname}
                         disabled
                       />
                     </div>
@@ -300,7 +298,10 @@ const LoginPage = () => {
 
                     <div className="mb-4">
                       <label className="form-label">
-                        Email <span className="text-muted">(optional)</span>
+                        Email{" "}
+                        <span className="text-muted">
+                          (optional, for password recovery)
+                        </span>
                       </label>
                       <input
                         type="email"
@@ -311,7 +312,7 @@ const LoginPage = () => {
                         disabled={loading}
                       />
                       <small className="form-text text-muted">
-                        For password recovery
+                        Required only if you want to recover your password
                       </small>
                     </div>
 
