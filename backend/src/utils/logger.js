@@ -1,21 +1,8 @@
 import pino from "pino";
 import { config } from "../config/env.js";
 
-/**
- * Централизованная система логирования с Pino
- *
- * Преимущества Pino:
- * - Высокая производительность (быстрее чем Winston)
- * - Структурированные логи (JSON)
- * - Легкая интеграция с инструментами мониторинга
- * - Минимальное влияние на производительность
- */
-
 const logger = pino({
   level: config.log.level,
-
-  // В development режиме - красивый вывод
-  // В production - JSON для парсинга
   transport: config.isDevelopment
     ? {
         target: "pino-pretty",
@@ -28,22 +15,13 @@ const logger = pino({
         },
       }
     : undefined,
-
-  // Дополнительные поля для всех логов
   base: {
     env: config.env,
     pid: process.pid,
   },
-
-  // Форматирование временных меток
   timestamp: () => `,"time":"${new Date().toISOString()}"`,
 });
 
-/**
- * Обертки для удобного логирования
- */
-
-// HTTP запросы
 export const httpLogger = (req, res, next) => {
   const start = Date.now();
 
@@ -57,7 +35,6 @@ export const httpLogger = (req, res, next) => {
       ip: req.ip,
     };
 
-    // Разные уровни для разных статусов
     if (res.statusCode >= 500) {
       logger.error(logData, "HTTP Request");
     } else if (res.statusCode >= 400) {
@@ -70,7 +47,6 @@ export const httpLogger = (req, res, next) => {
   next();
 };
 
-// Ошибки с контекстом
 export const logError = (error, context = {}) => {
   logger.error(
     {

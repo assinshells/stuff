@@ -2,22 +2,7 @@ import { config } from "../config/env.js";
 import logger, { logError } from "../utils/logger.js";
 import { AppError } from "../utils/errors.js";
 
-/**
- * Централизованный обработчик ошибок
- *
- * Функции:
- * - Обработка всех ошибок в одном месте
- * - Логирование ошибок
- * - Форматирование ответа клиенту
- * - Скрытие деталей в production
- * - Обработка специфичных ошибок (MongoDB, Validation, JWT)
- */
-
-/**
- * Обработчик ошибок MongoDB
- */
 const handleMongoError = (err) => {
-  // Дубликат ключа (E11000)
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern)[0];
     const value = err.keyValue[field];
@@ -28,7 +13,6 @@ const handleMongoError = (err) => {
     };
   }
 
-  // Ошибка валидации Mongoose
   if (err.name === "ValidationError") {
     const errors = Object.values(err.errors).map((e) => ({
       field: e.path,
@@ -44,7 +28,6 @@ const handleMongoError = (err) => {
     };
   }
 
-  // Неверный ObjectId
   if (err.name === "CastError") {
     return {
       statusCode: 400,
@@ -56,9 +39,6 @@ const handleMongoError = (err) => {
   return null;
 };
 
-/**
- * Обработчик JWT ошибок
- */
 const handleJWTError = (err) => {
   if (err.name === "JsonWebTokenError") {
     return {
@@ -79,54 +59,67 @@ const handleJWTError = (err) => {
   return null;
 };
 
-/**
- * Главный обработчик ошибок
- */
+const handleJoiError = (err) => {
+  if (err.isJoi || err.name === "ValidationError") {
+    const errors = err.details?.map((detail) => ({
+      field: detail.path.join("."),
+      message: detail.message,
+      type: detail.type,
+    }));
+
+    return {
+      statusCode: 422,
+      code: "VALIDATION_ERROR",
+      message: "Validation failed",
+      errors,
+    };
+  }
+
+  return null;
+};
+
 export const errorHandler = (err, req, res, next) => {
-  // Логируем ошибку с контекстом
   logError(err, {
     url: req.url,
     method: req.method,
     ip: req.ip,
     userAgent: req.get("user-agent"),
-    body: config.isDevelopment ? req.body : undefined, // Только в dev
+    body: config.isDevelopment ? req.body : undefined,
   });
 
-  // Базовые значения
   let statusCode = 500;
   let code = "INTERNAL_ERROR";
   let message = "Internal server error";
   let errors = undefined;
 
-  // Обработка кастомных ошибок
   if (err instanceof AppError) {
     statusCode = err.statusCode;
     code = err.code;
     message = err.message;
     errors = err.errors;
-  }
-  // Обработка MongoDB ошибок
-  else {
+  } else {
     const mongoError = handleMongoError(err);
     if (mongoError) {
       ({ statusCode, code, message, errors } = mongoError);
     } else {
-      // Обработка JWT ошибок
       const jwtError = handleJWTError(err);
       if (jwtError) {
         ({ statusCode, code, message } = jwtError);
+      } else {
+        const joiError = handleJoiError(err);
+        if (joiError) {
+          ({ statusCode, code, message, errors } = joiError);
+        }
       }
     }
   }
 
-  // Формируем ответ
   const response = {
     success: false,
     error: {
       code,
       message,
       ...(errors && { errors }),
-      // В development показываем стек и дополнительную информацию
       ...(config.isDevelopment && {
         stack: err.stack,
         raw: err.message,
@@ -135,14 +128,9 @@ export const errorHandler = (err, req, res, next) => {
     },
   };
 
-  // Отправляем ответ
   res.status(statusCode).json(response);
 };
 
-/**
- * Обработчик 404 (роут не найден)
- * Должен быть последним в цепочке middleware, перед errorHandler
- */
 export const notFoundHandler = (req, res) => {
   logger.warn(`Route not found: ${req.method} ${req.url}`);
 

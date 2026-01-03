@@ -1,9 +1,5 @@
 import axios from "axios";
 
-/**
- * Централизованный Axios instance
- */
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
   timeout: 10000,
@@ -13,13 +9,27 @@ const api = axios.create({
   withCredentials: true,
 });
 
-/**
- * Request Interceptor
- */
+const SENSITIVE_FIELDS = ["password", "token", "accessToken", "refreshToken"];
+
+const sanitizeData = (data) => {
+  if (!data || typeof data !== "object") return data;
+
+  const sanitized = { ...data };
+  for (const key of SENSITIVE_FIELDS) {
+    if (sanitized[key]) {
+      sanitized[key] = "***REDACTED***";
+    }
+  }
+  return sanitized;
+};
+
 api.interceptors.request.use(
   (config) => {
     if (import.meta.env.DEV) {
-      console.log(`🚀 ${config.method.toUpperCase()} ${config.url}`);
+      console.log(
+        `🚀 ${config.method.toUpperCase()} ${config.url}`,
+        sanitizeData(config.data)
+      );
     }
 
     return config;
@@ -29,15 +39,12 @@ api.interceptors.request.use(
   }
 );
 
-/**
- * Response Interceptor
- */
 api.interceptors.response.use(
   (response) => {
     if (import.meta.env.DEV) {
       console.log(
         `✅ ${response.config.method.toUpperCase()} ${response.config.url}`,
-        response.data
+        sanitizeData(response.data)
       );
     }
 
@@ -69,7 +76,6 @@ api.interceptors.response.use(
         );
       }
 
-      // Специальная обработка статусов (кроме 401 - его обрабатывает AuthContext)
       if (status === 403) {
         customError.message = "You do not have permission";
       } else if (status === 404) {
